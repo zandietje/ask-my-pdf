@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AskMyPdf.Core/AskMyPdf.Core.csproj" />
+    <Project Path="src/AskMyPdf.Infrastructure/AskMyPdf.Infrastructure.csproj" />
+    <Project Path="src/AskMyPdf.Web/AskMyPdf.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AskMyPdf.Tests/AskMyPdf.Tests.csproj" />
+  </Folder>
+</Solution>
