@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { PdfViewerPanel } from "@/components/pdf/PdfViewerPanel";
 import { UploadDropzone } from "@/components/upload/UploadDropzone";
 import { DocumentList } from "@/components/upload/DocumentList";
 import { useDocumentChat } from "@/hooks/useDocumentChat";
@@ -65,18 +66,14 @@ export function App() {
     </div>
   );
 
-  const rightPanel = (
-    <div className="flex flex-col h-full items-center justify-center bg-muted/30 text-muted-foreground gap-2">
-      {selectedDoc ? (
-        <>
-          <p>PDF Viewer — {selectedDoc.fileName}</p>
-          {activeCitation && (
-            <p className="text-xs">Viewing: Page {activeCitation.pageNumber}</p>
-          )}
-        </>
-      ) : (
-        <p>Upload and select a document to view it here</p>
-      )}
+  const rightPanel = selectedDoc ? (
+    <PdfViewerPanel
+      documentId={selectedDoc.id}
+      activeCitation={activeCitation}
+    />
+  ) : (
+    <div className="flex h-full items-center justify-center bg-muted/30 text-muted-foreground">
+      <p>Upload and select a document to view it here</p>
     </div>
   );
 
