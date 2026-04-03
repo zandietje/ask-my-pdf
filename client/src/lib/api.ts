@@ -23,3 +23,8 @@ export async function getDocuments(): Promise<DocumentDto[]> {
 export function getDocumentFileUrl(documentId: string): string {
   return `/api/documents/${documentId}/file`;
 }
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  const res = await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete document");
+}

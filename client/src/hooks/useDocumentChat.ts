@@ -107,5 +107,10 @@ export function useDocumentChat() {
     setMessages([]);
   }, []);
 
-  return { messages, isLoading, sendMessage, clearMessages };
+  const restoreMessages = useCallback((msgs: ChatMessage[]) => {
+    abortRef.current?.abort();
+    setMessages(msgs);
+  }, []);
+
+  return { messages, isLoading, sendMessage, clearMessages, restoreMessages };
 }

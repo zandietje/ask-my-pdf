@@ -1,5 +1,6 @@
 namespace AskMyPdf.Infrastructure.Services;
 
+using System.Text;
 using AskMyPdf.Core.Models;
 using AskMyPdf.Infrastructure.Ai;
 using AskMyPdf.Infrastructure.Data;
@@ -38,32 +39,81 @@ public class QuestionService(
 
         logger.LogInformation("Streaming answer for document {FileName} ({DocumentId})", doc.FileName, documentId);
 
+        // Phase 1: Stream text deltas immediately for real-time UX.
+        //          Collect citations — we need the full answer before we can focus them.
+        var fullAnswer = new StringBuilder();
+        var pendingCitations = new List<Citation>();
+
         await foreach (var evt in claude.StreamAnswerAsync(question, pdfBytes, doc.FileName))
         {
             switch (evt)
             {
-                case AnswerStreamEvent.TextDelta:
+                case AnswerStreamEvent.TextDelta { Text: var text }:
+                    fullAnswer.Append(text);
                     yield return evt;
                     break;
 
                 case AnswerStreamEvent.CitationReceived { Citation: var citation }:
-                    var highlightAreas = transformer.ToHighlightAreas(
-                        citation.CitedText,
-                        citation.PageNumber,
-                        pageBounds);
-
-                    yield return new AnswerStreamEvent.CitationReceived(
-                        citation with
-                        {
-                            DocumentId = documentId,
-                            HighlightAreas = highlightAreas,
-                        });
+                    pendingCitations.Add(citation);
                     break;
 
                 case AnswerStreamEvent.Done:
-                    yield return evt;
+                    // Don't yield Done yet — process citations first
                     break;
             }
         }
+
+        // Phase 2: Now we have the complete answer. Focus each citation with full context.
+        var completeAnswer = fullAnswer.ToString();
+        logger.LogInformation("Answer complete ({AnswerLen} chars), processing {Count} citations",
+            completeAnswer.Length, pendingCitations.Count);
+
+        foreach (var citation in pendingCitations)
+        {
+            var focusedText = citation.CitedText;
+
+            if (citation.CitedText.Length > 200)
+            {
+                var page = pageBounds.FirstOrDefault(p => p.PageNumber == citation.PageNumber);
+                var pageText = page is not null
+                    ? CoordinateTransformer.ReconstructPageText(page)
+                    : citation.CitedText;
+
+                logger.LogInformation(
+                    "Focusing citation page {Page}: citedText={CitedLen} chars, pageText={PageLen} chars",
+                    citation.PageNumber, citation.CitedText.Length, pageText.Length);
+
+                var sonnetResult = await claude.FocusCitationAsync(
+                    pageText, question, completeAnswer);
+
+                if (sonnetResult is not null)
+                {
+                    focusedText = sonnetResult;
+                    logger.LogInformation("Focus succeeded: {FocusLen} chars", focusedText.Length);
+                }
+                else
+                {
+                    logger.LogWarning("Focus returned null — using original citedText ({Len} chars)",
+                        citation.CitedText.Length);
+                }
+            }
+
+            var highlightAreas = transformer.ToHighlightAreas(
+                focusedText, citation.PageNumber, pageBounds);
+
+            logger.LogDebug(
+                "Citation page={Page}: focused {OrigLen}→{FocusLen} chars, {Count} highlight areas",
+                citation.PageNumber, citation.CitedText.Length, focusedText.Length, highlightAreas.Count);
+
+            yield return new AnswerStreamEvent.CitationReceived(
+                citation with
+                {
+                    DocumentId = documentId,
+                    CitedText = focusedText,
+                    HighlightAreas = highlightAreas,
+                });
+        }
+
+        yield return new AnswerStreamEvent.Done();
     }
 }

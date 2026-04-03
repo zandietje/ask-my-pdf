@@ -12,41 +12,53 @@ public class CoordinateTransformerTests
     private static PageBoundingData CreatePage(int pageNumber, double width, double height, List<WordBoundingBox> words)
         => new(pageNumber, width, height, words);
 
+    // --- Coordinate conversion tests ---
+
     [Fact]
     public void ToHighlightAreas_Known_Coordinates_Produce_Correct_Percentages()
     {
-        // Page: 100x200 units. Word at (10, 150, 30, 170) in PdfPig coords (left, bottom, right, top)
-        var words = new List<WordBoundingBox>
-        {
-            new("Hello", 10, 150, 30, 170)
-        };
+        var words = new List<WordBoundingBox> { new("Hello", 10, 150, 30, 170) };
         var pages = new List<PageBoundingData> { CreatePage(1, 100, 200, words) };
 
         var areas = _transformer.ToHighlightAreas("Hello", 1, pages);
 
         areas.Should().HaveCount(1);
         var area = areas[0];
-        area.Left.Should().BeApproximately(10.0, 0.01);      // (10/100)*100
-        area.Top.Should().BeApproximately(15.0, 0.01);       // ((200-170)/200)*100
-        area.Width.Should().BeApproximately(20.0, 0.01);     // ((30-10)/100)*100
-        area.Height.Should().BeApproximately(10.0, 0.01);    // ((170-150)/200)*100
+        area.Left.Should().BeApproximately(10.0, 0.01);
+        area.Top.Should().BeApproximately(15.0, 0.01);
+        area.Width.Should().BeApproximately(20.0, 0.01);
+        area.Height.Should().BeApproximately(10.0, 0.01);
     }
 
     [Fact]
     public void ToHighlightAreas_YAxis_Is_Flipped()
     {
-        // Word near top of page in PdfPig (high Y) → low top_pct in viewer
-        var words = new List<WordBoundingBox>
-        {
-            new("Top", 0, 190, 50, 200)
-        };
+        var words = new List<WordBoundingBox> { new("Top", 0, 190, 50, 200) };
         var pages = new List<PageBoundingData> { CreatePage(1, 100, 200, words) };
 
         var areas = _transformer.ToHighlightAreas("Top", 1, pages);
 
         areas.Should().HaveCount(1);
-        areas[0].Top.Should().BeApproximately(0.0, 0.01); // ((200-200)/200)*100 = 0%
+        areas[0].Top.Should().BeApproximately(0.0, 0.01);
     }
+
+    [Fact]
+    public void ToHighlightAreas_PageIndex_Is_ZeroBased()
+    {
+        var words = new List<WordBoundingBox> { new("Hello", 10, 100, 50, 112) };
+        var pages = new List<PageBoundingData>
+        {
+            CreatePage(1, 200, 200, []),
+            CreatePage(2, 200, 200, words)
+        };
+
+        var areas = _transformer.ToHighlightAreas("Hello", 2, pages);
+
+        areas.Should().HaveCount(1);
+        areas[0].PageIndex.Should().Be(1);
+    }
+
+    // --- Text matching tests ---
 
     [Fact]
     public void ToHighlightAreas_TextMatching_Finds_Correct_Words()
@@ -63,100 +75,12 @@ public class CoordinateTransformerTests
         var areas = _transformer.ToHighlightAreas("quick brown", 1, pages);
 
         areas.Should().HaveCount(1);
-        // Should span from "quick" (left=35) to "brown" (right=90)
-        var area = areas[0];
-        area.Left.Should().BeApproximately(17.5, 0.01);   // (35/200)*100
-        area.Width.Should().BeApproximately(27.5, 0.01);   // ((90-35)/200)*100
+        areas[0].Left.Should().BeApproximately(17.5, 0.01);
+        areas[0].Width.Should().BeApproximately(27.5, 0.01);
     }
 
     [Fact]
-    public void ToHighlightAreas_Whitespace_Normalization()
-    {
-        var words = new List<WordBoundingBox>
-        {
-            new("Hello", 10, 100, 50, 112),
-            new("World", 55, 100, 95, 112)
-        };
-        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
-
-        // Extra whitespace + control characters in cited text
-        var areas = _transformer.ToHighlightAreas("  Hello   World  ", 1, pages);
-
-        areas.Should().HaveCount(1);
-    }
-
-    [Fact]
-    public void ToHighlightAreas_NoMatch_Returns_Empty()
-    {
-        var words = new List<WordBoundingBox>
-        {
-            new("Hello", 10, 100, 50, 112)
-        };
-        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
-
-        var areas = _transformer.ToHighlightAreas("Nonexistent text", 1, pages);
-
-        areas.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void ToHighlightAreas_EmptyPage_Returns_Empty()
-    {
-        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, []) };
-
-        var areas = _transformer.ToHighlightAreas("anything", 1, pages);
-
-        areas.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void ToHighlightAreas_WrongPageNumber_Returns_Empty()
-    {
-        var words = new List<WordBoundingBox> { new("Hello", 10, 100, 50, 112) };
-        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
-
-        var areas = _transformer.ToHighlightAreas("Hello", 5, pages);
-
-        areas.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void ToHighlightAreas_MultiLine_Produces_Multiple_Areas()
-    {
-        var words = new List<WordBoundingBox>
-        {
-            // Line 1 (top=112)
-            new("First", 10, 100, 50, 112),
-            new("line", 55, 100, 80, 112),
-            // Line 2 (top=90, more than LineTolerance=2 apart from line 1)
-            new("second", 10, 78, 60, 90),
-            new("line", 65, 78, 85, 90)
-        };
-        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
-
-        var areas = _transformer.ToHighlightAreas("First line second line", 1, pages);
-
-        areas.Should().HaveCount(2, "words on two different lines should produce two highlight areas");
-    }
-
-    [Fact]
-    public void ToHighlightAreas_PageIndex_Is_ZeroBased()
-    {
-        var words = new List<WordBoundingBox> { new("Hello", 10, 100, 50, 112) };
-        var pages = new List<PageBoundingData>
-        {
-            CreatePage(1, 200, 200, []),
-            CreatePage(2, 200, 200, words)
-        };
-
-        var areas = _transformer.ToHighlightAreas("Hello", 2, pages);
-
-        areas.Should().HaveCount(1);
-        areas[0].PageIndex.Should().Be(1, "pageNumber 2 should map to pageIndex 1 (0-based)");
-    }
-
-    [Fact]
-    public void ToHighlightAreas_CaseInsensitive_Matching()
+    public void ToHighlightAreas_CaseInsensitive()
     {
         var words = new List<WordBoundingBox>
         {
@@ -165,16 +89,144 @@ public class CoordinateTransformerTests
         };
         var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
 
-        var areas = _transformer.ToHighlightAreas("hello world", 1, pages);
-
-        areas.Should().HaveCount(1);
+        _transformer.ToHighlightAreas("hello world", 1, pages).Should().HaveCount(1);
     }
 
     [Fact]
-    public void Normalize_Strips_ControlChars_And_Collapses_Whitespace()
+    public void ToHighlightAreas_Whitespace_Normalized()
     {
-        var result = CoordinateTransformer.Normalize("Hello\u0002  \t World\n!");
+        var words = new List<WordBoundingBox>
+        {
+            new("Hello", 10, 100, 50, 112),
+            new("World", 55, 100, 95, 112)
+        };
+        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
 
-        result.Should().Be("hello world!");
+        _transformer.ToHighlightAreas("  Hello   World  ", 1, pages).Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void ToHighlightAreas_Newlines_In_CitedText()
+    {
+        var words = new List<WordBoundingBox>
+        {
+            new("Ltd.", 10, 100, 40, 112),
+            new("65", 45, 100, 55, 112),
+            new("Chulia", 60, 100, 90, 112),
+        };
+        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
+
+        _transformer.ToHighlightAreas("Ltd.\n65 Chulia", 1, pages).Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void ToHighlightAreas_Tokenization_Differences()
+    {
+        // PdfPig splits "Q&A" into separate tokens
+        var words = new List<WordBoundingBox>
+        {
+            new("Document", 10, 100, 60, 112),
+            new("Q", 65, 100, 72, 112),
+            new("&", 73, 100, 78, 112),
+            new("A", 79, 100, 86, 112),
+        };
+        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
+
+        _transformer.ToHighlightAreas("Document Q&A", 1, pages).Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void ToHighlightAreas_MultiLine_Produces_Multiple_Areas()
+    {
+        var words = new List<WordBoundingBox>
+        {
+            new("First", 10, 100, 50, 112),
+            new("line", 55, 100, 80, 112),
+            new("second", 10, 78, 60, 90),
+            new("line", 65, 78, 85, 90)
+        };
+        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
+
+        _transformer.ToHighlightAreas("First line second line", 1, pages)
+            .Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void ToHighlightAreas_NoMatch_Returns_Empty()
+    {
+        var words = new List<WordBoundingBox> { new("Hello", 10, 100, 50, 112) };
+        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
+
+        _transformer.ToHighlightAreas("Nonexistent", 1, pages).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ToHighlightAreas_EmptyPage_Returns_Empty()
+    {
+        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, []) };
+        _transformer.ToHighlightAreas("anything", 1, pages).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ToHighlightAreas_WrongPage_Returns_Empty()
+    {
+        var words = new List<WordBoundingBox> { new("Hello", 10, 100, 50, 112) };
+        var pages = new List<PageBoundingData> { CreatePage(1, 200, 200, words) };
+
+        _transformer.ToHighlightAreas("Hello", 5, pages).Should().BeEmpty();
+    }
+
+    // --- FocusCitedText tests ---
+
+    [Fact]
+    public void FocusCitedText_ShortText_Returns_AsIs()
+    {
+        var result = CoordinateTransformer.FocusCitedText(
+            "Backend: .NET (required)", "what is required?");
+
+        result.Should().Be("Backend: .NET (required)");
+    }
+
+    [Fact]
+    public void FocusCitedText_Narrows_To_Relevant_Line()
+    {
+        var citedText = "Tech Stack\nBackend: .NET (required)\nFrontend: Your choice\nAI/LLM: Any model";
+
+        var result = CoordinateTransformer.FocusCitedText(citedText, "what is required for backend?");
+
+        result.Should().Contain("Backend");
+        result.Should().Contain(".NET");
+        result.Should().NotContain("Frontend");
+        result.Should().NotContain("AI/LLM");
+    }
+
+    [Fact]
+    public void FocusCitedText_No_Keyword_Match_Returns_First_Line()
+    {
+        var citedText = "Line one\nLine two\nLine three";
+
+        var result = CoordinateTransformer.FocusCitedText(citedText, "something completely unrelated xyz");
+
+        result.Should().Be("Line one");
+    }
+
+    [Fact]
+    public void FocusCitedText_TwoLines_Returns_AsIs()
+    {
+        var citedText = "Line one\nLine two";
+
+        var result = CoordinateTransformer.FocusCitedText(citedText, "anything");
+
+        result.Should().Be(citedText);
+    }
+
+    // --- ToDense tests ---
+
+    [Fact]
+    public void ToDense_Strips_Whitespace_And_ControlChars()
+    {
+        CoordinateTransformer.ToDense("Hello World").Should().Be("helloworld");
+        CoordinateTransformer.ToDense("Q&A\nSystem").Should().Be("q&asystem");
+        CoordinateTransformer.ToDense("  spaces  ").Should().Be("spaces");
     }
 }

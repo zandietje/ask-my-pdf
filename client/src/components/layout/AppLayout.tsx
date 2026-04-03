@@ -11,7 +11,7 @@ export function AppLayout({ leftPanel, rightPanel }: AppLayoutProps) {
       <Panel defaultSize={40} minSize={25}>
         {leftPanel}
       </Panel>
-      <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary/20 transition-colors" />
+      <PanelResizeHandle className="w-1 bg-border hover:bg-primary/30 active:bg-primary/40 transition-colors" />
       <Panel defaultSize={60} minSize={30}>
         {rightPanel}
       </Panel>

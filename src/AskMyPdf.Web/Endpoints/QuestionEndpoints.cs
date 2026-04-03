@@ -74,10 +74,13 @@ public static class QuestionEndpoints
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error streaming answer for document {DocumentId}", req.DocumentId);
+                var errorMsg = ex.Message.Contains("rate_limit", StringComparison.OrdinalIgnoreCase)
+                    ? "Rate limit reached. Please wait a moment before asking another question."
+                    : "An error occurred while generating the answer. Please try again.";
                 try
                 {
                     await ctx.Response.WriteAsync(
-                        "event: error\ndata: {\"error\":\"An error occurred while generating the answer. Please try again.\"}\n\n", ct);
+                        $"event: error\ndata: {{\"error\":\"{errorMsg}\"}}\n\n", ct);
                     await ctx.Response.Body.FlushAsync(ct);
                 }
                 catch

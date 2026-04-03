@@ -3,7 +3,7 @@ import type { ChatMessage, Citation } from "@/lib/types";
 import { MessageBubble } from "./MessageBubble";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Send, MessageSquare } from "lucide-react";
+import { Send, MessageSquareText } from "lucide-react";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -32,13 +32,20 @@ export function ChatPanel({ messages, isLoading, hasDocument, onSendMessage, onC
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-            <MessageSquare className="h-8 w-8" />
-            <p className="text-sm">
-              {hasDocument
-                ? "Ask a question about the document"
-                : "Select a document to get started"}
-            </p>
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+            <div className="flex items-center justify-center h-12 w-12 rounded-full bg-muted">
+              <MessageSquareText className="h-6 w-6" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">
+                {hasDocument ? "Ready to answer" : "No document selected"}
+              </p>
+              <p className="text-xs mt-0.5">
+                {hasDocument
+                  ? "Ask any question about the document"
+                  : "Upload and select a PDF to get started"}
+              </p>
+            </div>
           </div>
         )}
         {messages.map(msg => (
@@ -51,17 +58,19 @@ export function ChatPanel({ messages, isLoading, hasDocument, onSendMessage, onC
         <div ref={scrollRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t p-3 flex gap-2">
+      <form onSubmit={handleSubmit} className="border-t bg-white p-3 flex gap-2">
         <Input
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder={hasDocument ? "Ask a question..." : "Select a document first"}
           disabled={!hasDocument || isLoading}
+          className="bg-slate-50 focus:bg-white transition-colors"
         />
         <Button
           type="submit"
           size="icon"
           disabled={!input.trim() || isLoading || !hasDocument}
+          className="shrink-0"
         >
           <Send className="h-4 w-4" />
         </Button>

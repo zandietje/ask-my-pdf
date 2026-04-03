@@ -70,5 +70,11 @@ public static class DocumentEndpoints
                 ? Results.NotFound()
                 : Results.File(bytes, "application/pdf");
         });
+
+        group.MapDelete("/{id}", async (string id, SqliteDb db) =>
+        {
+            var deleted = await db.DeleteDocumentAsync(id);
+            return deleted ? Results.NoContent() : Results.NotFound();
+        });
     }
 }

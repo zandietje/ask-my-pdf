@@ -92,6 +92,35 @@ public class SqliteDb(string dbPath)
         await tx.CommitAsync();
     }
 
+    public async Task<bool> DeleteDocumentAsync(string id)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+
+        // Delete from child tables first, then parent
+        foreach (var table in new[] { "page_bounds", "stored_files" })
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = (SqliteTransaction)tx;
+            cmd.CommandText = $"DELETE FROM {table} WHERE document_id = @id";
+            cmd.Parameters.AddWithValue("@id", id);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        int rows;
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = (SqliteTransaction)tx;
+            cmd.CommandText = "DELETE FROM documents WHERE id = @id";
+            cmd.Parameters.AddWithValue("@id", id);
+            rows = await cmd.ExecuteNonQueryAsync();
+        }
+
+        await tx.CommitAsync();
+        return rows > 0;
+    }
+
     public async Task<Document?> GetDocumentAsync(string id)
     {
         await using var conn = new SqliteConnection(_connectionString);

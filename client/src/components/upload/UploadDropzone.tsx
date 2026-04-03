@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef } from "react";
-import { Upload, Loader2 } from "lucide-react";
+import { Upload, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UploadDropzoneProps {
@@ -27,7 +27,7 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
     setIsUploading(true);
     try {
       await onUpload(file);
-      setSuccess(`"${file.name}" uploaded successfully`);
+      setSuccess(`"${file.name}" uploaded`);
       setTimeout(() => setSuccess(null), 3000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
@@ -71,20 +71,20 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 cursor-pointer transition-colors",
+          "flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed p-3 cursor-pointer transition-all",
           isDragging
-            ? "border-primary bg-primary/5"
-            : "border-muted-foreground/25 hover:border-primary/50",
+            ? "border-primary bg-primary/5 scale-[1.02]"
+            : "border-border hover:border-primary/40 hover:bg-accent/30",
           isUploading && "pointer-events-none opacity-60"
         )}
       >
         {isUploading ? (
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
         ) : (
-          <Upload className="h-6 w-6 text-muted-foreground" />
+          <Upload className="h-5 w-5 text-muted-foreground" />
         )}
-        <p className="text-sm text-muted-foreground">
-          {isUploading ? "Uploading..." : "Drop a PDF here, or click to select"}
+        <p className="text-xs text-muted-foreground">
+          {isUploading ? "Processing PDF..." : "Drop a PDF here, or click to select"}
         </p>
         <input
           ref={inputRef}
@@ -95,10 +95,13 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
         />
       </div>
       {error && (
-        <p className="mt-1.5 text-sm text-destructive">{error}</p>
+        <p className="mt-1.5 text-xs text-destructive">{error}</p>
       )}
       {success && (
-        <p className="mt-1.5 text-sm text-green-600">{success}</p>
+        <p className="mt-1.5 text-xs text-emerald-600 flex items-center gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          {success}
+        </p>
       )}
     </div>
   );
