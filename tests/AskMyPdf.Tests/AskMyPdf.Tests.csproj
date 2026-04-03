@@ -7,7 +7,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AskMyPdf.Core\AskMyPdf.Core.csproj" />
+    <ProjectReference Include="..\..\src\AskMyPdf.Infrastructure\AskMyPdf.Infrastructure.csproj" />
   </ItemGroup>
+
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
