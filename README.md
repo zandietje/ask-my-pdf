@@ -122,6 +122,23 @@ dotnet test AskMyPdf.slnx
 | React 18, not 19 | @react-pdf-viewer compatibility (archived March 2026 with React 18 support) |
 | No EF Core | Direct ADO.NET for full control and simplicity |
 
+## Production Build
+
+For a single-process deployment (no separate frontend dev server):
+
+```bash
+# 1. Build the frontend
+cd client && npm run build && cd ..
+
+# 2. Copy built files to .NET wwwroot
+cp -r client/dist/* src/AskMyPdf.Web/wwwroot/
+
+# 3. Run (serves both API + frontend on one port)
+dotnet run --project src/AskMyPdf.Web -c Release
+```
+
+Navigate to `http://localhost:5000` — the .NET app serves both the API and the React SPA.
+
 ## Project Structure
 
 ```
@@ -129,12 +146,48 @@ ask-my-pdf/
 ├── src/
 │   ├── AskMyPdf.Core/              # Domain models (zero dependencies)
 │   ├── AskMyPdf.Infrastructure/    # SQLite, PdfPig, Claude API, services
-│   └── AskMyPdf.Web/               # Minimal API endpoints + DI
+│   └── AskMyPdf.Web/               # Minimal API endpoints + DI + static files
 ├── client/                          # React 18 + Vite + TypeScript
 ├── tests/
 │   └── AskMyPdf.Tests/             # xUnit + FluentAssertions
 ├── AskMyPdf.slnx
 └── Directory.Build.props
+```
+
+## Known Limitations
+
+- **100-page PDF limit** — Claude API context window constraint
+- **32 MB file size limit** — Claude API upload constraint
+- **Single document per session** — questions are scoped to one document at a time
+- **English-optimized** — bounding box matching assumes left-to-right text
+- **No conversation memory** — each question is independent (no multi-turn context)
+
+## Troubleshooting
+
+### "Anthropic:ApiKey is required" on startup
+
+Ensure you've set the API key via user secrets:
+
+```bash
+cd src/AskMyPdf.Web
+dotnet user-secrets set "Anthropic:ApiKey" "sk-ant-..."
+```
+
+### PDF upload fails with "could not be processed"
+
+Ensure the file is a valid PDF (not a renamed .docx or image). The app validates PDF magic bytes (`%PDF` header).
+
+### Slow first question on a document
+
+The first question sends the full PDF to Claude and initializes prompt caching. Subsequent questions on the same document are ~90% cheaper and faster due to cache hits.
+
+### Frontend not loading in production mode
+
+Ensure you've built the frontend and copied the output:
+
+```bash
+cd client && npm run build
+cp -r dist/* ../src/AskMyPdf.Web/wwwroot/
 ```
 
 ## License

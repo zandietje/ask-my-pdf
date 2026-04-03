@@ -6,13 +6,15 @@ using AskMyPdf.Infrastructure.Pdf;
 
 public class DocumentService(BoundingBoxExtractor extractor, SqliteDb db)
 {
-    public async Task<Document> UploadAsync(Stream pdfStream, string fileName, long fileSize)
-    {
-        using var ms = new MemoryStream();
-        await pdfStream.CopyToAsync(ms);
-        var bytes = ms.ToArray();
+    private const int MaxPageCount = 100;
 
-        var pages = extractor.ExtractWordBounds(bytes);
+    public async Task<Document> UploadAsync(byte[] pdfBytes, string fileName, long fileSize)
+    {
+        var pages = extractor.ExtractWordBounds(pdfBytes);
+
+        if (pages.Count > MaxPageCount)
+            throw new InvalidOperationException(
+                $"PDF exceeds the {MaxPageCount}-page limit. Please upload a shorter document.");
 
         var doc = new Document(
             Id: Guid.NewGuid().ToString("N"),
@@ -21,7 +23,7 @@ public class DocumentService(BoundingBoxExtractor extractor, SqliteDb db)
             PageCount: pages.Count,
             FileSize: fileSize);
 
-        await db.SaveDocumentAsync(doc, bytes, pages);
+        await db.SaveDocumentAsync(doc, pdfBytes, pages);
 
         return doc;
     }

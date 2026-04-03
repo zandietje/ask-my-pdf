@@ -6,11 +6,14 @@ using AskMyPdf.Web.Dtos;
 
 public static class DocumentEndpoints
 {
+    // PDF magic bytes: "%PDF"
+    private static readonly byte[] PdfMagicBytes = [0x25, 0x50, 0x44, 0x46];
+
     public static void MapDocumentEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/documents");
 
-        group.MapPost("/upload", async (IFormFile file, DocumentService svc) =>
+        group.MapPost("/upload", async (IFormFile file, DocumentService svc, ILogger<DocumentService> logger) =>
         {
             if (file.Length == 0)
                 return Results.BadRequest(new { error = "File is empty" });
@@ -19,10 +22,29 @@ public static class DocumentEndpoints
             if (file.Length > 32 * 1024 * 1024)
                 return Results.BadRequest(new { error = "File exceeds 32MB limit" });
 
-            await using var stream = file.OpenReadStream();
-            var doc = await svc.UploadAsync(stream, file.FileName, file.Length);
+            // Read into memory for magic bytes check + processing
+            using var ms = new MemoryStream();
+            await file.OpenReadStream().CopyToAsync(ms);
+            var bytes = ms.ToArray();
 
-            return Results.Ok(new UploadResponse(doc.Id, doc.FileName, doc.PageCount, doc.FileSize));
+            // Validate PDF magic bytes
+            if (bytes.Length < 4 || !bytes.AsSpan(0, 4).SequenceEqual(PdfMagicBytes))
+                return Results.BadRequest(new { error = "File is not a valid PDF" });
+
+            try
+            {
+                var doc = await svc.UploadAsync(bytes, file.FileName, file.Length);
+                return Results.Ok(new UploadResponse(doc.Id, doc.FileName, doc.PageCount, doc.FileSize));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to process PDF: {FileName}", file.FileName);
+                return Results.BadRequest(new { error = "The uploaded file could not be processed. Please ensure it is a valid PDF." });
+            }
         })
         .DisableAntiforgery();
 

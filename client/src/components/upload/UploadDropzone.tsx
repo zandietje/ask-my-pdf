@@ -10,6 +10,7 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -22,9 +23,12 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
       return;
     }
     setError(null);
+    setSuccess(null);
     setIsUploading(true);
     try {
       await onUpload(file);
+      setSuccess(`"${file.name}" uploaded successfully`);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
@@ -92,6 +96,9 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
       </div>
       {error && (
         <p className="mt-1.5 text-sm text-destructive">{error}</p>
+      )}
+      {success && (
+        <p className="mt-1.5 text-sm text-green-600">{success}</p>
       )}
     </div>
   );

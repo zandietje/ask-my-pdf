@@ -73,12 +73,15 @@ export function useDocumentChat() {
           } else if (eventType === "citation" && data) {
             const parsed = JSON.parse(data) as Citation;
             citations = [...citations, parsed];
+          } else if (eventType === "error" && data) {
+            const errorData = JSON.parse(data);
+            text += "\n\nError: " + (errorData.error || "An error occurred.");
           }
 
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantId
-                ? { ...m, content: text, citations, isStreaming: eventType !== "done" }
+                ? { ...m, content: text, citations, isStreaming: eventType !== "done" && eventType !== "error" }
                 : m
             )
           );

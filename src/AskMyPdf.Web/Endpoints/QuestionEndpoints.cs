@@ -14,7 +14,7 @@ public static class QuestionEndpoints
 
     public static void MapQuestionEndpoints(this WebApplication app)
     {
-        app.MapPost("/api/questions", async (QuestionRequest req, QuestionService svc, HttpContext ctx) =>
+        app.MapPost("/api/questions", async (QuestionRequest req, QuestionService svc, HttpContext ctx, ILogger<QuestionService> logger) =>
         {
             if (string.IsNullOrWhiteSpace(req.Question))
             {
@@ -33,34 +33,57 @@ public static class QuestionEndpoints
             ctx.Response.Headers.CacheControl = "no-cache";
             ctx.Response.Headers.Connection = "keep-alive";
 
-            await foreach (var evt in svc.StreamAnswerAsync(req.Question, req.DocumentId))
-            {
-                var (eventType, data) = evt switch
-                {
-                    AnswerStreamEvent.TextDelta td => ("text-delta", JsonSerializer.Serialize(
-                        new { text = td.Text }, JsonOptions)),
-                    AnswerStreamEvent.CitationReceived cr => ("citation", JsonSerializer.Serialize(
-                        new
-                        {
-                            documentId = cr.Citation.DocumentId,
-                            documentName = cr.Citation.DocumentName,
-                            pageNumber = cr.Citation.PageNumber,
-                            citedText = cr.Citation.CitedText,
-                            highlightAreas = cr.Citation.HighlightAreas.Select(a => new
-                            {
-                                pageIndex = a.PageIndex,
-                                left = a.Left,
-                                top = a.Top,
-                                width = a.Width,
-                                height = a.Height,
-                            }),
-                        }, JsonOptions)),
-                    AnswerStreamEvent.Done => ("done", "{}"),
-                    _ => ("unknown", "{}"),
-                };
+            var ct = ctx.RequestAborted;
 
-                await ctx.Response.WriteAsync($"event: {eventType}\ndata: {data}\n\n");
-                await ctx.Response.Body.FlushAsync();
+            try
+            {
+                await foreach (var evt in svc.StreamAnswerAsync(req.Question, req.DocumentId).WithCancellation(ct))
+                {
+                    var (eventType, data) = evt switch
+                    {
+                        AnswerStreamEvent.TextDelta td => ("text-delta", JsonSerializer.Serialize(
+                            new { text = td.Text }, JsonOptions)),
+                        AnswerStreamEvent.CitationReceived cr => ("citation", JsonSerializer.Serialize(
+                            new
+                            {
+                                documentId = cr.Citation.DocumentId,
+                                documentName = cr.Citation.DocumentName,
+                                pageNumber = cr.Citation.PageNumber,
+                                citedText = cr.Citation.CitedText,
+                                highlightAreas = cr.Citation.HighlightAreas.Select(a => new
+                                {
+                                    pageIndex = a.PageIndex,
+                                    left = a.Left,
+                                    top = a.Top,
+                                    width = a.Width,
+                                    height = a.Height,
+                                }),
+                            }, JsonOptions)),
+                        AnswerStreamEvent.Done => ("done", "{}"),
+                        _ => ("unknown", "{}"),
+                    };
+
+                    await ctx.Response.WriteAsync($"event: {eventType}\ndata: {data}\n\n", ct);
+                    await ctx.Response.Body.FlushAsync(ct);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Client disconnected — expected, no action needed
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error streaming answer for document {DocumentId}", req.DocumentId);
+                try
+                {
+                    await ctx.Response.WriteAsync(
+                        "event: error\ndata: {\"error\":\"An error occurred while generating the answer. Please try again.\"}\n\n", ct);
+                    await ctx.Response.Body.FlushAsync(ct);
+                }
+                catch
+                {
+                    // Client may have disconnected
+                }
             }
         });
     }

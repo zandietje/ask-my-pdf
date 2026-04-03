@@ -1,14 +1,26 @@
 import type { DocumentDto } from "@/lib/types";
 import { FileText } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 interface DocumentListProps {
   documents: DocumentDto[];
   selectedId: string | null;
   onSelect: (doc: DocumentDto) => void;
+  isLoading?: boolean;
 }
 
-export function DocumentList({ documents, selectedId, onSelect }: DocumentListProps) {
+export function DocumentList({ documents, selectedId, onSelect, isLoading }: DocumentListProps) {
+  if (isLoading) {
+    return (
+      <div className="space-y-1.5">
+        {[1, 2, 3].map(i => (
+          <Skeleton key={i} className="h-8 w-full" />
+        ))}
+      </div>
+    );
+  }
+
   if (documents.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">No documents uploaded yet</p>

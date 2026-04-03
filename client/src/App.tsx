@@ -10,12 +10,16 @@ import type { DocumentDto, Citation } from "@/lib/types";
 
 export function App() {
   const [documents, setDocuments] = useState<DocumentDto[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
   const [selectedDoc, setSelectedDoc] = useState<DocumentDto | null>(null);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const { messages, isLoading, sendMessage, clearMessages } = useDocumentChat();
 
   useEffect(() => {
-    getDocuments().then(setDocuments).catch(console.error);
+    getDocuments()
+      .then(setDocuments)
+      .catch(console.error)
+      .finally(() => setDocumentsLoading(false));
   }, []);
 
   const handleUpload = useCallback(async (file: File) => {
@@ -52,6 +56,7 @@ export function App() {
           documents={documents}
           selectedId={selectedDoc?.id ?? null}
           onSelect={handleSelectDoc}
+          isLoading={documentsLoading}
         />
       </div>
       <div className="flex-1 overflow-hidden">
