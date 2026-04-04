@@ -1,3 +1,7 @@
 askmypdf.duckdns.org {
 	reverse_proxy ask-my-pdf:5000
 }
+
+alphiq.duckdns.org {
+	reverse_proxy host.docker.internal:8081
+}
