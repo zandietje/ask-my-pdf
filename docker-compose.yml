@@ -2,8 +2,8 @@ services:
   ask-my-pdf:
     build: .
     container_name: ask-my-pdf
-    ports:
-      - "8080:5000"
+    expose:
+      - "5000"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Anthropic__ApiKey=${ANTHROPIC_API_KEY}
@@ -18,5 +18,21 @@ services:
       retries: 3
       start_period: 15s
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: ask-my-pdf-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ask-my-pdf
+    restart: unless-stopped
+
 volumes:
   askmypdf-data:
+  caddy-data:
+  caddy-config:

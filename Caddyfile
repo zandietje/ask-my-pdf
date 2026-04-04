@@ -1,0 +1,3 @@
+askmypdf.duckdns.org {
+	reverse_proxy ask-my-pdf:5000
+}
