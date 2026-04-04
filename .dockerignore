@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/node_modules/
+client/dist/
+*.db
+.git/
+.vs/
+.vscode/
+*.user
+*.suo

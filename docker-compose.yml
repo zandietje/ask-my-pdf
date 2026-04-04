@@ -1,0 +1,22 @@
+services:
+  ask-my-pdf:
+    build: .
+    container_name: ask-my-pdf
+    ports:
+      - "8080:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Anthropic__ApiKey=${ANTHROPIC_API_KEY}
+      - Database__Path=/data/askmypdf.db
+    volumes:
+      - askmypdf-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  askmypdf-data:
