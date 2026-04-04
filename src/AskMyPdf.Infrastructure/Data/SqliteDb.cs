@@ -178,6 +178,35 @@ public class SqliteDb(string dbPath)
         return result as byte[];
     }
 
+    public async Task<List<PageBoundingData>> GetPageBoundsAsync(string documentId, IReadOnlyList<int> pageNumbers)
+    {
+        if (pageNumbers.Count == 0) return [];
+
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        var paramNames = pageNumbers.Select((_, i) => $"@p{i}").ToList();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"SELECT page_number, page_width, page_height, words_json FROM page_bounds WHERE document_id = @docId AND page_number IN ({string.Join(", ", paramNames)}) ORDER BY page_number";
+        cmd.Parameters.AddWithValue("@docId", documentId);
+        for (var i = 0; i < pageNumbers.Count; i++)
+            cmd.Parameters.AddWithValue(paramNames[i], pageNumbers[i]);
+
+        var pages = new List<PageBoundingData>();
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var words = JsonSerializer.Deserialize<List<WordBoundingBox>>(reader.GetString(3)) ?? [];
+            pages.Add(new PageBoundingData(
+                reader.GetInt32(0),
+                reader.GetDouble(1),
+                reader.GetDouble(2),
+                words));
+        }
+
+        return pages;
+    }
+
     public async Task<List<PageBoundingData>> GetPageBoundsAsync(string documentId)
     {
         await using var conn = new SqliteConnection(_connectionString);

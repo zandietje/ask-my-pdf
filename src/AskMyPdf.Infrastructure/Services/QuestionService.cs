@@ -1,5 +1,6 @@
 namespace AskMyPdf.Infrastructure.Services;
 
+using System.Runtime.CompilerServices;
 using System.Text;
 using AskMyPdf.Core.Models;
 using AskMyPdf.Infrastructure.Ai;
@@ -15,7 +16,8 @@ public class QuestionService(
 {
     public async IAsyncEnumerable<AnswerStreamEvent> StreamAnswerAsync(
         string question,
-        string documentId)
+        string documentId,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         var doc = await db.GetDocumentAsync(documentId);
         if (doc is null)
@@ -35,8 +37,6 @@ public class QuestionService(
             yield break;
         }
 
-        var pageBounds = await db.GetPageBoundsAsync(documentId);
-
         logger.LogInformation("Streaming answer for document {FileName} ({DocumentId})", doc.FileName, documentId);
 
         // Phase 1: Stream text deltas immediately for real-time UX.
@@ -44,7 +44,7 @@ public class QuestionService(
         var fullAnswer = new StringBuilder();
         var pendingCitations = new List<Citation>();
 
-        await foreach (var evt in claude.StreamAnswerAsync(question, pdfBytes, doc.FileName))
+        await foreach (var evt in claude.StreamAnswerAsync(question, pdfBytes, doc.FileName, ct))
         {
             switch (evt)
             {
@@ -63,7 +63,7 @@ public class QuestionService(
             }
         }
 
-        // Phase 2: Group citations by page, one focus call per page.
+        // Phase 2: Group citations by page, parallelize focus calls.
         var completeAnswer = fullAnswer.ToString();
         var citedPages = pendingCitations
             .Select(c => c.PageNumber)
@@ -74,36 +74,50 @@ public class QuestionService(
         logger.LogInformation("Answer complete ({AnswerLen} chars), {CitationCount} citations across {PageCount} pages",
             completeAnswer.Length, pendingCitations.Count, citedPages.Count);
 
-        foreach (var pageNumber in citedPages)
+        if (citedPages.Count > 0)
         {
-            var page = pageBounds.FirstOrDefault(p => p.PageNumber == pageNumber);
-            if (page is null || page.Words.Count == 0)
-                continue;
+            // Load bounding data only for cited pages
+            var pageBounds = await db.GetPageBoundsAsync(documentId, citedPages);
 
-            var pageText = CoordinateTransformer.ReconstructPageText(page);
-
-            var focusedText = await claude.FocusCitationAsync(
-                pageText, question, completeAnswer);
-
-            if (focusedText is null)
+            // Fire all focus calls in parallel
+            var focusTasks = citedPages.Select(async pageNumber =>
             {
-                logger.LogInformation("Page {Page}: NO_MATCH — no clear source text found", pageNumber);
-                continue;
-            }
+                var page = pageBounds.FirstOrDefault(p => p.PageNumber == pageNumber);
+                if (page is null || page.Words.Count == 0)
+                    return (Citation?)null;
 
-            var highlightAreas = transformer.ToHighlightAreas(
-                focusedText, pageNumber, pageBounds);
+                var pageText = CoordinateTransformer.ReconstructPageText(page);
+                var focusedText = await claude.FocusCitationAsync(
+                    pageText, question, completeAnswer, ct);
 
-            logger.LogInformation("Page {Page}: focused to {FocusLen} chars, {AreaCount} highlight areas",
-                pageNumber, focusedText.Length, highlightAreas.Count);
+                if (focusedText is null)
+                {
+                    logger.LogInformation("Page {Page}: NO_MATCH — no clear source text found", pageNumber);
+                    return null;
+                }
 
-            yield return new AnswerStreamEvent.CitationReceived(
-                new Citation(
+                var highlightAreas = transformer.ToHighlightAreas(
+                    focusedText, pageNumber, pageBounds);
+
+                logger.LogInformation("Page {Page}: focused to {FocusLen} chars, {AreaCount} highlight areas",
+                    pageNumber, focusedText.Length, highlightAreas.Count);
+
+                return new Citation(
                     DocumentId: documentId,
                     DocumentName: doc.FileName,
                     PageNumber: pageNumber,
                     CitedText: focusedText,
-                    HighlightAreas: highlightAreas));
+                    HighlightAreas: highlightAreas);
+            }).ToList();
+
+            var results = await Task.WhenAll(focusTasks);
+
+            // Yield in page order (citedPages is already sorted, Task.WhenAll preserves order)
+            foreach (var citation in results)
+            {
+                if (citation is not null)
+                    yield return new AnswerStreamEvent.CitationReceived(citation);
+            }
         }
 
         yield return new AnswerStreamEvent.Done();

@@ -21,6 +21,9 @@ if (string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException(
         "Anthropic:ApiKey is required. Set via user-secrets: dotnet user-secrets set \"Anthropic:ApiKey\" \"sk-ant-...\"");
 builder.Services.AddSingleton(new AnthropicClient(new Anthropic.Core.ClientOptions { ApiKey = apiKey }));
+builder.Services.AddSingleton(new ClaudeServiceOptions(
+    AnswerModel: builder.Configuration["Anthropic:AnswerModel"] ?? "claude-sonnet-4-20250514",
+    FocusModel: builder.Configuration["Anthropic:FocusModel"] ?? "claude-haiku-4-5-20251001"));
 builder.Services.AddSingleton<ClaudeService>();
 builder.Services.AddScoped<QuestionService>();
 

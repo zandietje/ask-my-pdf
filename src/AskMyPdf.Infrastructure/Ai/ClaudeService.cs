@@ -1,13 +1,13 @@
 namespace AskMyPdf.Infrastructure.Ai;
 
+using System.Runtime.CompilerServices;
 using Anthropic;
 using Anthropic.Models.Messages;
 using AskMyPdf.Core.Models;
 using Microsoft.Extensions.Logging;
 
-public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger)
+public class ClaudeService(AnthropicClient client, ClaudeServiceOptions options, ILogger<ClaudeService> logger)
 {
-    private const string Model = "claude-sonnet-4-20250514";
 
     private const string GroundingPrompt = """
         You are a document Q&A assistant. Answer the user's question based ONLY on the provided document.
@@ -27,8 +27,8 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
     private const string FocusPromptTemplate = """
         You are given a passage from a document page. A user asked a question and an AI produced an answer based on this passage.
 
-        Question: {0}
-        Answer: {1}
+        Question: {{QUESTION}}
+        Answer: {{ANSWER}}
 
         Your task is to extract the exact parts of the passage that directly support the answer.
 
@@ -44,13 +44,14 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
     public async IAsyncEnumerable<AnswerStreamEvent> StreamAnswerAsync(
         string question,
         byte[] pdfBytes,
-        string fileName)
+        string fileName,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         var pdfBase64 = Convert.ToBase64String(pdfBytes);
 
         var parameters = new MessageCreateParams
         {
-            Model = Model,
+            Model = options.AnswerModel,
             MaxTokens = 4096,
             System = GroundingPrompt,
             Messages =
@@ -74,7 +75,7 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
 
         logger.LogInformation("Sending question to Claude for document {FileName}", fileName);
 
-        await foreach (var evt in client.Messages.CreateStreaming(parameters))
+        await foreach (var evt in client.Messages.CreateStreaming(parameters).WithCancellation(ct))
         {
             if (evt.TryPickContentBlockDelta(out var deltaEvt))
             {
@@ -106,15 +107,18 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
     /// Returns null if the call fails or the result can't be validated — caller should fall back.
     /// </summary>
     public async Task<string?> FocusCitationAsync(
-        string citedText, string question, string fullAnswer)
+        string citedText, string question, string fullAnswer,
+        CancellationToken ct = default)
     {
         try
         {
-            var systemPrompt = string.Format(FocusPromptTemplate, question, fullAnswer);
+            var systemPrompt = FocusPromptTemplate
+                .Replace("{{QUESTION}}", question)
+                .Replace("{{ANSWER}}", fullAnswer);
 
             var parameters = new MessageCreateParams
             {
-                Model = Model,
+                Model = options.FocusModel,
                 MaxTokens = 500,
                 System = systemPrompt,
                 Messages =
@@ -130,7 +134,7 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
                 ],
             };
 
-            var response = await client.Messages.Create(parameters);
+            var response = await client.Messages.Create(parameters, cancellationToken: ct);
 
             // Extract text from response content blocks
             var resultText = string.Concat(

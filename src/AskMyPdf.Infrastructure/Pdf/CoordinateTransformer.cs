@@ -118,7 +118,7 @@ public class CoordinateTransformer
             [' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries))
         {
             var clean = NormalizeToken(raw);
-            if (clean.Length >= 3)
+            if (clean.Length >= 4)
                 tokens.Add(clean);
         }
 
@@ -149,29 +149,28 @@ public class CoordinateTransformer
         return sb.ToString();
     }
 
+    internal static List<List<WordBoundingBox>> GroupWordsIntoLines(List<WordBoundingBox> words)
+    {
+        if (words.Count == 0) return [];
+
+        var lines = new List<List<WordBoundingBox>> { new() { words[0] } };
+        for (var i = 1; i < words.Count; i++)
+        {
+            if (Math.Abs(words[i].Top - lines[^1][^1].Top) <= LineTolerance)
+                lines[^1].Add(words[i]);
+            else
+                lines.Add([words[i]]);
+        }
+        return lines;
+    }
+
     /// <summary>
     /// Reconstructs readable text from the word bounding boxes on a page.
     /// Groups words into visual lines and joins with spaces/newlines.
     /// </summary>
     public static string ReconstructPageText(PageBoundingData page)
     {
-        if (page.Words.Count == 0)
-            return "";
-
-        // Group words into visual lines (same approach as GroupIntoHighlightAreas)
-        var lines = new List<List<WordBoundingBox>> { new() { page.Words[0] } };
-
-        for (var i = 1; i < page.Words.Count; i++)
-        {
-            var word = page.Words[i];
-            var prevWord = lines[^1][^1];
-
-            if (Math.Abs(word.Top - prevWord.Top) <= LineTolerance)
-                lines[^1].Add(word);
-            else
-                lines.Add([word]);
-        }
-
+        var lines = GroupWordsIntoLines(page.Words);
         return string.Join("\n", lines.Select(line =>
             string.Join(" ", line.Select(w => w.Text))));
     }
@@ -185,28 +184,9 @@ public class CoordinateTransformer
             return [];
 
         var pageIndex = pageNumber - 1; // Viewer is 0-indexed
-        var areas = new List<HighlightArea>();
-
-        var currentLine = new List<WordBoundingBox> { matchedWords[0] };
-
-        for (var i = 1; i < matchedWords.Count; i++)
-        {
-            var word = matchedWords[i];
-            var prevWord = currentLine[^1];
-
-            if (Math.Abs(word.Top - prevWord.Top) <= LineTolerance)
-            {
-                currentLine.Add(word);
-            }
-            else
-            {
-                areas.Add(LineToHighlightArea(currentLine, page, pageIndex));
-                currentLine = [word];
-            }
-        }
-
-        areas.Add(LineToHighlightArea(currentLine, page, pageIndex));
-        return areas;
+        return GroupWordsIntoLines(matchedWords)
+            .Select(line => LineToHighlightArea(line, page, pageIndex))
+            .ToList();
     }
 
     private static HighlightArea LineToHighlightArea(
