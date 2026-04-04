@@ -37,5 +37,6 @@ out/
 
 # Development artifacts (not part of demo)
 .claude/
+CLAUDE.md
 PLAN.md
 PRPs/

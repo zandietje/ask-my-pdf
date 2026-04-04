@@ -13,8 +13,9 @@ public static class DocumentEndpoints
     {
         var group = app.MapGroup("/api/documents");
 
-        group.MapPost("/upload", async (IFormFile file, DocumentService svc, ILogger<DocumentService> logger) =>
+        group.MapPost("/upload", async (IFormFile file, DocumentService svc, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("AskMyPdf.DocumentEndpoints");
             if (file.Length == 0)
                 return Results.BadRequest(new { error = "File is empty" });
             if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))

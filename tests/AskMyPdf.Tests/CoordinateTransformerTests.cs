@@ -176,6 +176,46 @@ public class CoordinateTransformerTests
         _transformer.ToHighlightAreas("Hello", 5, pages).Should().BeEmpty();
     }
 
+    // --- Per-line fallback tests (two-column PDFs) ---
+
+    [Fact]
+    public void FindMatchedWordIndices_PerLine_Fallback_Matches_NonContiguous_Lines()
+    {
+        // Simulates a two-column PDF where PdfPig interleaves left and right column words.
+        // The cited text "Alpha Beta" appears on one visual line, but other words sit between them
+        // in PdfPig's reading order. The per-line dense match should still find them.
+        var words = new List<WordBoundingBox>
+        {
+            new("Alpha", 10, 100, 50, 112),
+            new("Unrelated", 200, 100, 260, 112),  // right column word interleaved
+            new("Beta", 55, 100, 80, 112),
+        };
+
+        // Full dense match fails ("alphabeta" not contiguous in page string "alphaunrelatedbeta").
+        // Per-line fallback: "Alpha Beta" → dense "alphabeta" still not contiguous,
+        // so word-level fallback matches "Alpha" and "Beta" individually (both >= 4 chars).
+        var indices = CoordinateTransformer.FindMatchedWordIndices("Alpha Beta", words);
+
+        indices.Should().Contain(0, "should match 'Alpha'");
+        indices.Should().Contain(2, "should match 'Beta'");
+    }
+
+    [Fact]
+    public void FindMatchedWordIndices_MultiLine_CitedText_Matches_Each_Line()
+    {
+        var words = new List<WordBoundingBox>
+        {
+            new("First", 10, 100, 50, 112),
+            new("line", 55, 100, 80, 112),
+            new("Second", 10, 78, 60, 90),
+            new("line", 65, 78, 85, 90),
+        };
+
+        var indices = CoordinateTransformer.FindMatchedWordIndices("First line\nSecond line", words);
+
+        indices.Should().HaveCount(4, "all words from both lines should match");
+    }
+
     // --- ToDense tests ---
 
     [Fact]

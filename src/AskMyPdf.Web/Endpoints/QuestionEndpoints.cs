@@ -14,8 +14,9 @@ public static class QuestionEndpoints
 
     public static void MapQuestionEndpoints(this WebApplication app)
     {
-        app.MapPost("/api/questions", async (QuestionRequest req, QuestionService svc, HttpContext ctx, ILogger<QuestionService> logger) =>
+        app.MapPost("/api/questions", async (QuestionRequest req, QuestionService svc, HttpContext ctx, ILoggerFactory loggerFactory) =>
         {
+            var logger = loggerFactory.CreateLogger("AskMyPdf.QuestionEndpoints");
             if (string.IsNullOrWhiteSpace(req.Question))
             {
                 ctx.Response.StatusCode = 400;

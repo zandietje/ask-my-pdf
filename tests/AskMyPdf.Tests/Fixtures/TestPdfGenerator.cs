@@ -28,4 +28,22 @@ public static class TestPdfGenerator
 
         return builder.Build();
     }
+
+    /// <summary>
+    /// Creates a PDF with the specified number of pages.
+    /// Each page contains "Page N content" text.
+    /// </summary>
+    public static byte[] CreatePdf(int pageCount)
+    {
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+
+        for (var i = 1; i <= pageCount; i++)
+        {
+            var page = builder.AddPage(PageSize.A4);
+            page.AddText($"Page {i} content", 12, new PdfPoint(72, 700), font);
+        }
+
+        return builder.Build();
+    }
 }

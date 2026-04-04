@@ -10,7 +10,7 @@ A document Q&A application that lets you upload PDFs, ask natural language quest
 ## How It Works
 
 1. **Upload** a PDF document (up to 32 MB)
-2. **Ask** a question about its contents
+2. **Ask** a question about its contents (in any language)
 3. **Read** a streamed answer with inline citation chips (e.g. `[Page 7]`)
 4. **Click** a citation to jump to the exact passage, highlighted word-by-word in the PDF viewer
 
@@ -63,7 +63,7 @@ This project takes a **direct PDF** approach instead of the traditional RAG pipe
 | Frontend | React 18, TypeScript (strict), Vite |
 | Styling | Tailwind CSS, shadcn/ui |
 | PDF Viewer | @react-pdf-viewer/core + highlight plugin |
-| LLM | Anthropic Claude API (Citations + prompt caching) |
+| LLM | Anthropic Claude API (Sonnet for answers, Haiku for citation focus, prompt caching) |
 | PDF Parsing | PdfPig (word-level bounding box extraction) |
 | Database | SQLite (documents, file blobs, bounding boxes) |
 | Testing | xUnit, FluentAssertions |
@@ -87,6 +87,10 @@ cd ask-my-pdf
 cd src/AskMyPdf.Web
 dotnet user-secrets set "Anthropic:ApiKey" "sk-ant-..."
 cd ../..
+
+# (Optional) Override models in appsettings.json
+# Anthropic:AnswerModel — model for answering questions (default: claude-sonnet-4-20250514)
+# Anthropic:FocusModel  — model for citation extraction (default: claude-haiku-4-5-20251001)
 
 # Install frontend dependencies
 cd client && npm install && cd ..
@@ -116,6 +120,8 @@ dotnet test AskMyPdf.slnx
 | Decision | Rationale |
 |----------|-----------|
 | Direct PDF, not RAG | Full-context answers outperform chunk-based retrieval; Citations API provides structured source references |
+| Two-phase citation focusing | Claude's Citations API often over-cites (whole paragraphs/sections). A second, parallel pass with Haiku extracts just the supporting sentences, producing precise word-level highlights |
+| Parallel focus calls + Haiku | Focus calls are independent per page — `Task.WhenAll` fires them concurrently. Using Haiku (not Sonnet) for this extractive task is ~10-20x cheaper and faster |
 | PdfPig for bounding boxes only | Text extraction is Claude's job; PdfPig maps `cited_text` → pixel-perfect highlight coordinates |
 | SSE, not WebSocket | Streaming is server-to-client only; SSE is simpler with native Fetch API support |
 | SQLite, not Postgres | Single-file database, zero infrastructure; perfect for a self-contained app |
@@ -159,7 +165,7 @@ ask-my-pdf/
 - **100-page PDF limit** — Claude API context window constraint
 - **32 MB file size limit** — Claude API upload constraint
 - **Single document per session** — questions are scoped to one document at a time
-- **English-optimized** — bounding box matching assumes left-to-right text
+- **Left-to-right text only** — bounding box matching assumes LTR scripts (answers support any language)
 - **No conversation memory** — each question is independent (no multi-turn context)
 
 ## Troubleshooting

@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 
 public class ClaudeService(AnthropicClient client, ClaudeServiceOptions options, ILogger<ClaudeService> logger)
 {
-
     private const string GroundingPrompt = """
         You are a document Q&A assistant. Answer the user's question based ONLY on the provided document.
 
@@ -103,7 +102,7 @@ public class ClaudeService(AnthropicClient client, ClaudeServiceOptions options,
     }
 
     /// <summary>
-    /// Uses Sonnet to extract the precise span from a large citation that supports the answer.
+    /// Extracts the precise supporting span from a broad page citation using the configured focus model.
     /// Returns null if the call fails or the result can't be validated — caller should fall back.
     /// </summary>
     public async Task<string?> FocusCitationAsync(
@@ -136,27 +135,17 @@ public class ClaudeService(AnthropicClient client, ClaudeServiceOptions options,
 
             var response = await client.Messages.Create(parameters, cancellationToken: ct);
 
-            // Extract text from response content blocks
-            var resultText = string.Concat(
+            var rawText = string.Concat(
                 response.Content
                     .Select(block => block.TryPickText(out var tb) ? tb.Text : ""));
 
-            if (string.IsNullOrWhiteSpace(resultText))
-                return null;
-
-            resultText = resultText.Trim();
-
-            // Explicit "no match" from the LLM — the text doesn't contain a clear answer
-            if (resultText.Equals("NO_MATCH", StringComparison.OrdinalIgnoreCase))
+            var resultText = ParseFocusResponse(rawText);
+            if (resultText is null)
             {
-                logger.LogInformation("Focus returned NO_MATCH — text doesn't explicitly answer the question");
+                logger.LogInformation("Focus returned no usable result (raw: {RawLen} chars)",
+                    rawText?.Length ?? 0);
                 return null;
             }
-
-            // Strip surrounding quotes that Sonnet sometimes adds despite instructions
-            if ((resultText.StartsWith('"') && resultText.EndsWith('"')) ||
-                (resultText.StartsWith('\u201C') && resultText.EndsWith('\u201D')))
-                resultText = resultText[1..^1].Trim();
 
             logger.LogInformation("Focus returned {FocusLen} chars from page ({PageLen} chars)",
                 resultText.Length, citedText.Length);
@@ -167,5 +156,27 @@ public class ClaudeService(AnthropicClient client, ClaudeServiceOptions options,
             logger.LogWarning(ex, "Citation focus call failed");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Parses raw LLM output from the focus call into cleaned text.
+    /// Returns null for empty, whitespace-only, or NO_MATCH responses.
+    /// Strips surrounding quotes the model sometimes adds.
+    /// </summary>
+    internal static string? ParseFocusResponse(string? rawText)
+    {
+        if (string.IsNullOrWhiteSpace(rawText))
+            return null;
+
+        var text = rawText.Trim();
+
+        if (text.Equals("NO_MATCH", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if ((text.StartsWith('"') && text.EndsWith('"')) ||
+            (text.StartsWith('\u201C') && text.EndsWith('\u201D')))
+            text = text[1..^1].Trim();
+
+        return text;
     }
 }
