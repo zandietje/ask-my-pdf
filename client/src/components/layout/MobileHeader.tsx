@@ -8,7 +8,7 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ documentName, onOpenSidebar }: MobileHeaderProps) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-white border-b shrink-0 safe-area-top">
+    <div className="flex items-center gap-3 px-4 py-3 bg-white border-b shrink-0">
       <Button
         variant="ghost"
         size="icon"
