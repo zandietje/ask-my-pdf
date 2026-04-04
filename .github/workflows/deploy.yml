@@ -94,7 +94,7 @@ jobs:
             # Wait for health check
             echo "Waiting for health check..."
             for i in $(seq 1 30); do
-              if curl -sf http://localhost:5000/health > /dev/null 2>&1; then
+              if docker exec ask-my-pdf curl -sf http://localhost:5000/health > /dev/null 2>&1; then
                 echo "Application is healthy!"
                 exit 0
               fi
