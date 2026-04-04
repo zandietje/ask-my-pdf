@@ -31,10 +31,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 
 WORKDIR /app
 COPY --from=backend /publish .
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 ENV HOME=/root
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://0.0.0.0:5000
 
 EXPOSE 5000
-ENTRYPOINT ["dotnet", "AskMyPdf.Web.dll"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["dotnet", "AskMyPdf.Web.dll"]
