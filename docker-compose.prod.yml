@@ -12,6 +12,7 @@ services:
       - Database__Path=/data/askmypdf.db
     volumes:
       - askmypdf-data:/data
+      - claude-config:/root/.claude
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -37,6 +38,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  claude-config:
   askmypdf-data:
   caddy-data:
   caddy-config:
