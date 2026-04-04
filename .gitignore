@@ -34,3 +34,8 @@ Thumbs.db
 # Build
 publish/
 out/
+
+# Development artifacts (not part of demo)
+.claude/
+PLAN.md
+PRPs/

@@ -287,8 +287,17 @@ npm run build        # Production build → dist/
 
 ## Workflow
 
-1. Plan the next piece of work
-2. Implement the task
-3. Review for quality and simplicity
-4. Run build + tests (`dotnet build AskMyPdf.slnx && dotnet test AskMyPdf.slnx`)
-5. Repeat
+Use Claude commands to stay structured:
+
+1. `/plan` → generate full implementation plan
+2. `/prp` → generate task PRP for next piece of work
+3. Implement the task
+4. `/review` → validate quality and simplicity
+5. `/validate` → run build + tests
+6. Repeat from step 2
+
+Switch to specialized agents when deep focus is needed:
+- `@architect` for design decisions and tradeoffs
+- `@backend` for .NET implementation and React integration
+- `@rag` for RAG pipeline specifics (chunking, retrieval, prompts, citations)
+- `@reviewer` before committing or when code feels complex
