@@ -37,8 +37,8 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-3.5 py-2.5">
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+        <div className="max-w-[92%] md:max-w-[85%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-4 py-3 md:px-3.5 md:py-2.5">
+          <p className="text-base md:text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
         </div>
       </div>
     );
@@ -47,23 +47,23 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
   return (
     <div className="flex gap-2.5 justify-start">
       <div className="flex items-start pt-0.5 shrink-0">
-        <div className="flex items-center justify-center h-7 w-7 rounded-full bg-primary/10 text-primary">
-          <Bot className="h-4 w-4" />
+        <div className="flex items-center justify-center h-8 w-8 md:h-7 md:w-7 rounded-full bg-primary/10 text-primary">
+          <Bot className="h-4.5 w-4.5 md:h-4 md:w-4" />
         </div>
       </div>
-      <div className="max-w-[90%] min-w-0">
-        <div className="rounded-2xl rounded-tl-sm bg-white border border-border/60 shadow-sm px-3.5 py-2.5">
+      <div className="max-w-[95%] md:max-w-[90%] min-w-0">
+        <div className="rounded-2xl rounded-tl-sm bg-white border border-border/60 shadow-sm px-4 py-3 md:px-3.5 md:py-2.5">
           {message.isStreaming && !message.content ? (
             <div className="flex items-center gap-1.5 py-1">
               <div className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
+                <span className="h-2 w-2 md:h-1.5 md:w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
+                <span className="h-2 w-2 md:h-1.5 md:w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
+                <span className="h-2 w-2 md:h-1.5 md:w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
               </div>
-              <span className="text-xs text-muted-foreground">Analyzing document...</span>
+              <span className="text-sm md:text-xs text-muted-foreground">Analyzing document...</span>
             </div>
           ) : (
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">
+            <p className="text-base md:text-sm whitespace-pre-wrap leading-relaxed">
               {message.content}
               {message.isStreaming && (
                 <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse align-text-bottom rounded-sm" />
@@ -73,8 +73,8 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
         </div>
 
         {mergedCitations.length > 0 && (
-          <div className="mt-2 space-y-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+          <div className="mt-2.5 md:mt-2 space-y-2 md:space-y-1.5">
+            <span className="text-xs md:text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
               Evidence
             </span>
             {mergedCitations.map((citation, i) => (

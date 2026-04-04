@@ -71,7 +71,7 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "flex items-center gap-3 rounded-xl border-2 border-dashed p-3.5 cursor-pointer transition-all",
+          "flex items-center gap-3 rounded-xl border-2 border-dashed p-4 md:p-3.5 cursor-pointer transition-all",
           isDragging
             ? "border-primary bg-primary/5 scale-[1.01]"
             : "border-border hover:border-primary/40 hover:bg-accent/30",
@@ -79,7 +79,7 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
         )}
       >
         <div className={cn(
-          "flex items-center justify-center h-9 w-9 rounded-lg shrink-0 transition-colors",
+          "flex items-center justify-center h-10 w-10 md:h-9 md:w-9 rounded-lg shrink-0 transition-colors",
           isDragging ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
         )}>
           {isUploading ? (
@@ -89,10 +89,10 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
           )}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground/80">
+          <p className="text-base md:text-sm font-medium text-foreground/80">
             {isUploading ? "Processing..." : "Upload PDF"}
           </p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs md:text-[11px] text-muted-foreground">
             {isUploading ? "Extracting text and bounding boxes" : "Drag & drop or click to browse"}
           </p>
         </div>
@@ -106,12 +106,12 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
       </div>
       {error && (
         <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-destructive/5 border border-destructive/20 px-3 py-2">
-          <p className="text-xs text-destructive">{error}</p>
+          <p className="text-sm md:text-xs text-destructive">{error}</p>
         </div>
       )}
       {success && (
-        <p className="mt-2 text-xs text-emerald-600 flex items-center gap-1.5">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+        <p className="mt-2 text-sm md:text-xs text-emerald-600 flex items-center gap-1.5">
+          <CheckCircle2 className="h-4 w-4 md:h-3.5 md:w-3.5 shrink-0" />
           {success}
         </p>
       )}
