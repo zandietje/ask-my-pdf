@@ -1,18 +1,25 @@
 #!/bin/bash
 set -e
 
-# Restore Claude CLI config from backup if the main config is missing.
-# The volume persists /root/.claude/ (including backups), but /root/.claude.json
-# lives in the home dir root and gets lost on container recreation.
+# Persist /root/.claude.json across container recreations.
+# The volume mounts /root/.claude/ but .claude.json lives in the home dir root.
+# Solution: store the real file inside the volume, symlink from home dir.
+PERSIST_DIR="$HOME/.claude"
 CONFIG="$HOME/.claude.json"
-BACKUP_DIR="$HOME/.claude/backups"
+PERSISTED="$PERSIST_DIR/.claude.json.persisted"
 
-if [ ! -f "$CONFIG" ] && [ -d "$BACKUP_DIR" ]; then
-    LATEST=$(ls -t "$BACKUP_DIR"/.claude.json.backup.* 2>/dev/null | head -1)
-    if [ -n "$LATEST" ]; then
-        echo "Restoring Claude CLI config from backup: $LATEST"
-        cp "$LATEST" "$CONFIG"
-    fi
+mkdir -p "$PERSIST_DIR"
+
+if [ -L "$CONFIG" ]; then
+    # Already a symlink (e.g. container restart without recreation) — nothing to do
+    :
+elif [ -f "$CONFIG" ]; then
+    # Real file exists (fresh login happened) — move into volume and symlink
+    mv "$CONFIG" "$PERSISTED"
+    ln -s "$PERSISTED" "$CONFIG"
+elif [ -f "$PERSISTED" ]; then
+    # Container recreated but persisted copy exists — restore symlink
+    ln -s "$PERSISTED" "$CONFIG"
 fi
 
 exec "$@"
