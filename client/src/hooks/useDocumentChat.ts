@@ -9,7 +9,7 @@ export function useDocumentChat() {
   const [isLoading, setIsLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const sendMessage = useCallback(async (question: string, documentId: string) => {
+  const sendMessage = useCallback(async (question: string, documentId: string, engine?: string) => {
     const userMsg: ChatMessage = {
       id: generateId(),
       role: "user",
@@ -36,7 +36,7 @@ export function useDocumentChat() {
       const res = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, documentId }),
+        body: JSON.stringify({ question, documentId, engine: engine || undefined }),
         signal: controller.signal,
       });
 

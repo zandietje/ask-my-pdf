@@ -1,4 +1,4 @@
-import type { DocumentDto, UploadResponse } from "./types";
+import type { DocumentDto, EngineInfo, UploadResponse } from "./types";
 
 export async function uploadDocument(file: File): Promise<UploadResponse> {
   const formData = new FormData();
@@ -27,4 +27,10 @@ export function getDocumentFileUrl(documentId: string): string {
 export async function deleteDocument(documentId: string): Promise<void> {
   const res = await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete document");
+}
+
+export async function getEngines(): Promise<EngineInfo[]> {
+  const res = await fetch("/api/engines");
+  if (!res.ok) return [{ key: "anthropic", name: "Anthropic API" }];
+  return res.json();
 }

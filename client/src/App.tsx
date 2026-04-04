@@ -5,8 +5,9 @@ import { PdfViewerPanel } from "@/components/pdf/PdfViewerPanel";
 import { UploadDropzone } from "@/components/upload/UploadDropzone";
 import { DocumentList } from "@/components/upload/DocumentList";
 import { useDocumentChat } from "@/hooks/useDocumentChat";
-import { uploadDocument, getDocuments, deleteDocument } from "@/lib/api";
-import type { DocumentDto, ChatMessage, Citation } from "@/lib/types";
+import { uploadDocument, getDocuments, deleteDocument, getEngines } from "@/lib/api";
+import type { DocumentDto, ChatMessage, Citation, EngineInfo } from "@/lib/types";
+import { EngineSelector } from "@/components/ui/engine-selector";
 import { FileSearch } from "lucide-react";
 
 export function App() {
@@ -14,6 +15,8 @@ export function App() {
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [selectedDoc, setSelectedDoc] = useState<DocumentDto | null>(null);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+  const [engines, setEngines] = useState<EngineInfo[]>([]);
+  const [selectedEngine, setSelectedEngine] = useState<string>("anthropic");
   const { messages, isLoading, sendMessage, clearMessages, restoreMessages } = useDocumentChat();
   const chatCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
 
@@ -22,6 +25,9 @@ export function App() {
       .then(setDocuments)
       .catch(console.error)
       .finally(() => setDocumentsLoading(false));
+    getEngines()
+      .then(setEngines)
+      .catch(console.error);
   }, []);
 
   const handleUpload = useCallback(async (file: File) => {
@@ -60,8 +66,8 @@ export function App() {
 
   const handleSendMessage = useCallback((question: string) => {
     if (!selectedDoc) return;
-    sendMessage(question, selectedDoc.id);
-  }, [selectedDoc, sendMessage]);
+    sendMessage(question, selectedDoc.id, selectedEngine);
+  }, [selectedDoc, selectedEngine, sendMessage]);
 
   const handleDeleteDoc = useCallback(async (doc: DocumentDto) => {
     if (!window.confirm(`Delete "${doc.fileName}"? This cannot be undone.`)) return;
@@ -98,6 +104,11 @@ export function App() {
           </div>
         </div>
         <UploadDropzone onUpload={handleUpload} />
+        <EngineSelector
+          engines={engines}
+          selected={selectedEngine}
+          onChange={setSelectedEngine}
+        />
         <DocumentList
           documents={documents}
           selectedId={selectedDoc?.id ?? null}

@@ -216,6 +216,131 @@ public class CoordinateTransformerTests
         indices.Should().HaveCount(4, "all words from both lines should match");
     }
 
+    // --- ContiguousOnly / FindContiguousMatch tests ---
+
+    [Fact]
+    public void FindContiguousMatch_TwoColumnPdf_SpatialOrderFindsMatch()
+    {
+        // Simulates a two-column PDF: PdfPig interleaves words from both columns,
+        // but "Alpha Beta" are adjacent spatially (sorted by X: Alpha=10, Beta=55, Unrelated=200).
+        // Spatial ordering makes them contiguous → dense match succeeds.
+        var words = new List<WordBoundingBox>
+        {
+            new("Alpha", 10, 100, 50, 112),
+            new("Unrelated", 200, 100, 260, 112),  // right column word interleaved in PdfPig order
+            new("Beta", 55, 100, 80, 112),
+        };
+
+        var indices = CoordinateTransformer.FindContiguousMatch("Alpha Beta", words);
+
+        indices.Should().HaveCount(2);
+        indices.Should().Contain(0, "should match 'Alpha'");
+        indices.Should().Contain(2, "should match 'Beta'");
+        indices.Should().NotContain(1, "should NOT match 'Unrelated'");
+    }
+
+    [Fact]
+    public void FindContiguousMatch_SimpleContiguous_Works()
+    {
+        var words = new List<WordBoundingBox>
+        {
+            new("Hello", 10, 100, 50, 112),
+            new("World", 55, 100, 90, 112),
+        };
+
+        var indices = CoordinateTransformer.FindContiguousMatch("Hello World", words);
+        indices.Should().HaveCount(2);
+        indices.Should().Contain(0);
+        indices.Should().Contain(1);
+    }
+
+    [Fact]
+    public void FindContiguousMatch_NoMatch_ReturnsEmpty()
+    {
+        var words = new List<WordBoundingBox>
+        {
+            new("Hello", 10, 100, 50, 112),
+            new("World", 55, 100, 90, 112),
+        };
+
+        var indices = CoordinateTransformer.FindContiguousMatch("Goodbye Moon", words);
+        indices.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindContiguousMatch_DoesNotMatchScatteredWords()
+    {
+        // "erfgoed" and "voor" appear in multiple places on the page.
+        // Contiguous match for a sentence containing those words should only
+        // match the exact contiguous passage, not scattered occurrences.
+        var words = new List<WordBoundingBox>
+        {
+            // Line 1 left column
+            new("voor", 10, 200, 35, 212),
+            new("erfgoed", 40, 200, 80, 212),
+            new("bescherming", 85, 200, 140, 212),
+            // Line 1 right column
+            new("Het", 300, 200, 320, 212),
+            new("erfgoed", 325, 200, 365, 212),
+            new("voor", 370, 200, 395, 212),
+            new("iedereen", 400, 200, 450, 212),
+        };
+
+        var indices = CoordinateTransformer.FindContiguousMatch("Het erfgoed voor iedereen", words);
+
+        // Should match only the right column words (indices 3,4,5,6), not left column
+        indices.Should().HaveCount(4);
+        indices.Should().Contain(3);
+        indices.Should().Contain(4);
+        indices.Should().Contain(5);
+        indices.Should().Contain(6);
+        indices.Should().NotContain(0, "should not match left column 'voor'");
+        indices.Should().NotContain(1, "should not match left column 'erfgoed'");
+    }
+
+    [Fact]
+    public void FindContiguousMatch_DiacriticDifferences_StillMatches()
+    {
+        // PdfPig extracts "ë" as precomposed (U+00EB), CLI extracts "e" without diacritic.
+        // Unicode normalization (FormD + strip combining marks) makes them match.
+        var words = new List<WordBoundingBox>
+        {
+            new("premi\u00ebre", 10, 100, 70, 112),  // "première" with ë
+            new("keer", 75, 100, 100, 112),
+        };
+
+        // Snippet without the accent
+        var indices = CoordinateTransformer.FindContiguousMatch("premiere keer", words);
+        indices.Should().HaveCount(2, "diacritic differences should not prevent matching");
+    }
+
+    [Fact]
+    public void FindContiguousMatch_FallsBackToBoundedPerWord_WhenDenseFails()
+    {
+        // Dense match fails (completely different character encoding) but per-word
+        // fallback finds words and bounds them spatially to the right region.
+        var words = new List<WordBoundingBox>
+        {
+            // Left column (line 1)
+            new("belangrijk", 10, 200, 80, 212),
+            new("document", 85, 200, 140, 212),
+            // Right column (line 1) — the target passage
+            new("Zeer", 300, 200, 330, 212),
+            new("belangrijk", 335, 200, 405, 212),
+            new("rapport", 410, 200, 460, 212),
+        };
+
+        // The snippet "Zeer belangrijk rapport" — the dense match should find it in
+        // the spatially-ordered string: "belangrijkdocumentZeerbelangrijkrapport".
+        // If it doesn't (e.g. char encoding diff), the bounded fallback should
+        // concentrate on the right column, not scatter across both columns.
+        var indices = CoordinateTransformer.FindContiguousMatch("Zeer belangrijk rapport", words);
+
+        indices.Should().Contain(2, "should match 'Zeer'");
+        indices.Should().Contain(3, "should match right-column 'belangrijk'");
+        indices.Should().Contain(4, "should match 'rapport'");
+    }
+
     // --- ToDense tests ---
 
     [Fact]

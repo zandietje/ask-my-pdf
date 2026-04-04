@@ -36,3 +36,8 @@ export interface ChatMessage {
   citations: Citation[];
   isStreaming: boolean;
 }
+
+export interface EngineInfo {
+  key: string;
+  name: string;
+}

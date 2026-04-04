@@ -38,7 +38,7 @@ public static class QuestionEndpoints
 
             try
             {
-                await foreach (var evt in svc.StreamAnswerAsync(req.Question, req.DocumentId).WithCancellation(ct))
+                await foreach (var evt in svc.StreamAnswerAsync(req.Question, req.DocumentId, req.Engine).WithCancellation(ct))
                 {
                     var (eventType, data) = evt switch
                     {
