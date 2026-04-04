@@ -67,8 +67,13 @@ public partial class ClaudeCliRunner(ClaudeCliOptions options, ILogger<ClaudeCli
             if (process.ExitCode != 0)
             {
                 var err = stderr.ToString().Trim();
-                logger.LogWarning("Claude CLI exited with code {ExitCode}: {Stderr}", process.ExitCode, err);
-                return new CliResult(false, null, $"CLI exited with code {process.ExitCode}: {err}");
+                // CLI with --output-format json writes errors to stdout as JSON
+                // with is_error:true — extract the actual error message
+                var rawOut = stdout.ToString().Trim();
+                var cliError = TryExtractJsonError(rawOut);
+                var errorDetail = cliError ?? err;
+                logger.LogWarning("Claude CLI exited with code {ExitCode}: {Error}", process.ExitCode, errorDetail);
+                return new CliResult(false, null, $"CLI exited with code {process.ExitCode}: {errorDetail}");
             }
 
             var rawOutput = stdout.ToString().Trim();
@@ -143,6 +148,24 @@ public partial class ClaudeCliRunner(ClaudeCliOptions options, ILogger<ClaudeCli
             // Not valid JSON envelope — return raw text as fallback
             return rawOutput;
         }
+    }
+
+    /// <summary>
+    /// Extracts the error message from CLI JSON output when is_error is true.
+    /// </summary>
+    private static string? TryExtractJsonError(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(rawOutput);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("is_error", out var isErr) && isErr.GetBoolean() &&
+                root.TryGetProperty("result", out var result))
+                return result.GetString();
+        }
+        catch (JsonException) { }
+        return null;
     }
 
     private void TryKill(Process process)

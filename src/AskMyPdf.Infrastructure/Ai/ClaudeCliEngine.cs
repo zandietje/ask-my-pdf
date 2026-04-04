@@ -107,6 +107,8 @@ public class ClaudeCliEngine(ClaudeCliRunner runner, ILogger<ClaudeCliEngine> lo
             3. Each snippet should be one focused sentence or short passage, not a full paragraph
             4. If the document does not contain the answer, return: {"answer":"I could not find an answer to this question in the provided document.","evidence":[]}
             5. Page numbers are 1-indexed
+            6. Keep your answer concise — at most 3-4 short paragraphs. Focus on the most important information.
+            7. Limit evidence to the 5 most relevant snippets across all pages
             """;
     }
 

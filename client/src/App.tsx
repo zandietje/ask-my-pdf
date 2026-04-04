@@ -16,7 +16,7 @@ export function App() {
   const [selectedDoc, setSelectedDoc] = useState<DocumentDto | null>(null);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [engines, setEngines] = useState<EngineInfo[]>([]);
-  const [selectedEngine, setSelectedEngine] = useState<string>("anthropic");
+  const [selectedEngine, setSelectedEngine] = useState<string>("claude-cli");
   const { messages, isLoading, sendMessage, clearMessages, restoreMessages } = useDocumentChat();
   const chatCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
 
@@ -93,35 +93,50 @@ export function App() {
 
   const leftPanel = (
     <div className="flex flex-col h-full overflow-hidden bg-slate-50/50">
-      <div className="p-4 border-b bg-white space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary text-primary-foreground">
-            <FileSearch className="h-4.5 w-4.5" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight">Ask My PDF</h1>
-            <p className="text-[11px] text-muted-foreground -mt-0.5">Document Q&A with AI</p>
-          </div>
+      {/* Header */}
+      <div className="px-4 py-3 bg-white border-b flex items-center gap-2.5">
+        <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary text-primary-foreground shrink-0">
+          <FileSearch className="h-4.5 w-4.5" />
         </div>
+        <div>
+          <h1 className="text-base font-semibold tracking-tight leading-none">Ask My PDF</h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Document Q&A with AI</p>
+        </div>
+      </div>
+
+      {/* Setup (fixed) */}
+      <div className="px-4 pt-4 pb-3 space-y-4 shrink-0">
         <UploadDropzone onUpload={handleUpload} />
         <EngineSelector
           engines={engines}
           selected={selectedEngine}
           onChange={setSelectedEngine}
         />
-        <DocumentList
-          documents={documents}
-          selectedId={selectedDoc?.id ?? null}
-          onSelect={handleSelectDoc}
-          onDelete={handleDeleteDoc}
-          isLoading={documentsLoading}
-        />
       </div>
+
+      {/* Documents (scrollable) */}
+      <div className="px-4 pb-2 flex flex-col min-h-0 shrink-0 border-b" style={{ maxHeight: "35%" }}>
+        <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 shrink-0">
+          Documents
+        </label>
+        <div className="overflow-y-auto">
+          <DocumentList
+            documents={documents}
+            selectedId={selectedDoc?.id ?? null}
+            onSelect={handleSelectDoc}
+            onDelete={handleDeleteDoc}
+            isLoading={documentsLoading}
+          />
+        </div>
+      </div>
+
+      {/* Chat */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <ChatPanel
           messages={messages}
           isLoading={isLoading}
           hasDocument={selectedDoc !== null}
+          documentName={selectedDoc?.fileName ?? null}
           onSendMessage={handleSendMessage}
           onCitationClick={handleCitationClick}
         />
@@ -135,11 +150,13 @@ export function App() {
       activeCitation={activeCitation}
     />
   ) : (
-    <div className="flex h-full flex-col items-center justify-center bg-slate-50 text-muted-foreground gap-3">
-      <FileSearch className="h-12 w-12 text-muted-foreground/30" />
-      <div className="text-center">
-        <p className="text-sm font-medium">No document selected</p>
-        <p className="text-xs mt-0.5">Upload and select a PDF to view it here</p>
+    <div className="flex h-full flex-col items-center justify-center bg-slate-50 text-muted-foreground gap-4">
+      <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-muted">
+        <FileSearch className="h-8 w-8 text-muted-foreground/40" />
+      </div>
+      <div className="text-center space-y-1">
+        <p className="text-sm font-medium text-foreground/70">No document selected</p>
+        <p className="text-xs text-muted-foreground">Upload a PDF and select it to view here</p>
       </div>
     </div>
   );

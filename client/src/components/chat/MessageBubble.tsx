@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import type { ChatMessage, Citation } from "@/lib/types";
 import { CitationChip } from "./CitationChip";
-import { cn } from "@/lib/utils";
-import { Bot, User } from "lucide-react";
+import { Bot } from "lucide-react";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -35,43 +34,49 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
     [message.citations]
   );
 
-  return (
-    <div className={cn("flex gap-2", isUser ? "justify-end" : "justify-start")}>
-      {!isUser && (
-        <div className="flex items-start pt-1">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/10 text-primary shrink-0">
-            <Bot className="h-3.5 w-3.5" />
-          </div>
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-3.5 py-2.5">
+          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
         </div>
-      )}
-      <div
-        className={cn(
-          "max-w-[80%] rounded-xl px-3.5 py-2.5",
-          isUser
-            ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "bg-white border border-border/60 shadow-sm rounded-bl-sm"
-        )}
-      >
-        {!isUser && message.isStreaming && !message.content ? (
-          <div className="flex items-center gap-1.5 py-1">
-            <div className="flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2.5 justify-start">
+      <div className="flex items-start pt-0.5 shrink-0">
+        <div className="flex items-center justify-center h-7 w-7 rounded-full bg-primary/10 text-primary">
+          <Bot className="h-4 w-4" />
+        </div>
+      </div>
+      <div className="max-w-[90%] min-w-0">
+        <div className="rounded-2xl rounded-tl-sm bg-white border border-border/60 shadow-sm px-3.5 py-2.5">
+          {message.isStreaming && !message.content ? (
+            <div className="flex items-center gap-1.5 py-1">
+              <div className="flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
+              </div>
+              <span className="text-xs text-muted-foreground">Analyzing document...</span>
             </div>
-            <span className="text-xs text-muted-foreground">Analyzing document...</span>
-          </div>
-        ) : (
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">
-            {message.content}
-            {message.isStreaming && (
-              <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse align-text-bottom rounded-sm" />
-            )}
-          </p>
-        )}
+          ) : (
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">
+              {message.content}
+              {message.isStreaming && (
+                <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse align-text-bottom rounded-sm" />
+              )}
+            </p>
+          )}
+        </div>
 
         {mergedCitations.length > 0 && (
-          <div className="mt-2.5 space-y-1.5 border-t border-border/40 pt-2">
+          <div className="mt-2 space-y-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Evidence
+            </span>
             {mergedCitations.map((citation, i) => (
               <CitationChip
                 key={`${citation.pageNumber}-${i}`}
@@ -82,13 +87,6 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
           </div>
         )}
       </div>
-      {isUser && (
-        <div className="flex items-start pt-1">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground shrink-0">
-            <User className="h-3.5 w-3.5" />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

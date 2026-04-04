@@ -1,6 +1,6 @@
 import type { EngineInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Zap, Terminal } from "lucide-react";
+import { Zap, Search } from "lucide-react";
 
 interface EngineSelectorProps {
   engines: EngineInfo[];
@@ -11,13 +11,13 @@ interface EngineSelectorProps {
 const engineMeta: Record<string, { icon: typeof Zap; label: string; description: string }> = {
   anthropic: {
     icon: Zap,
-    label: "API",
-    description: "Fast, streaming",
+    label: "Quick",
+    description: "Fast streaming responses",
   },
   "claude-cli": {
-    icon: Terminal,
-    label: "CLI Agent",
-    description: "Deep analysis",
+    icon: Search,
+    label: "Deep",
+    description: "Thorough analysis",
   },
 };
 
@@ -27,7 +27,7 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
   return (
     <div className="space-y-1">
       <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-        AI Engine
+        Analysis Mode
       </label>
       <div className="flex rounded-lg bg-slate-100 p-0.5 gap-0.5">
         {engines.map((engine) => {
@@ -55,7 +55,7 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
               <span>{meta.label}</span>
               {meta.description && (
                 <span className={cn(
-                  "hidden sm:inline text-[10px] font-normal",
+                  "text-[10px] font-normal",
                   isSelected ? "text-muted-foreground" : "text-muted-foreground/60"
                 )}>
                   · {meta.description}
