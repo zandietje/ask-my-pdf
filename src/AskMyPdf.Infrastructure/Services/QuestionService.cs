@@ -63,55 +63,47 @@ public class QuestionService(
             }
         }
 
-        // Phase 2: Now we have the complete answer. Focus each citation with full context.
+        // Phase 2: Group citations by page, one focus call per page.
         var completeAnswer = fullAnswer.ToString();
-        logger.LogInformation("Answer complete ({AnswerLen} chars), processing {Count} citations",
-            completeAnswer.Length, pendingCitations.Count);
+        var citedPages = pendingCitations
+            .Select(c => c.PageNumber)
+            .Distinct()
+            .Order()
+            .ToList();
 
-        foreach (var citation in pendingCitations)
+        logger.LogInformation("Answer complete ({AnswerLen} chars), {CitationCount} citations across {PageCount} pages",
+            completeAnswer.Length, pendingCitations.Count, citedPages.Count);
+
+        foreach (var pageNumber in citedPages)
         {
-            var focusedText = citation.CitedText;
+            var page = pageBounds.FirstOrDefault(p => p.PageNumber == pageNumber);
+            if (page is null || page.Words.Count == 0)
+                continue;
 
-            if (citation.CitedText.Length > 200)
+            var pageText = CoordinateTransformer.ReconstructPageText(page);
+
+            var focusedText = await claude.FocusCitationAsync(
+                pageText, question, completeAnswer);
+
+            if (focusedText is null)
             {
-                var page = pageBounds.FirstOrDefault(p => p.PageNumber == citation.PageNumber);
-                var pageText = page is not null
-                    ? CoordinateTransformer.ReconstructPageText(page)
-                    : citation.CitedText;
-
-                logger.LogInformation(
-                    "Focusing citation page {Page}: citedText={CitedLen} chars, pageText={PageLen} chars",
-                    citation.PageNumber, citation.CitedText.Length, pageText.Length);
-
-                var sonnetResult = await claude.FocusCitationAsync(
-                    pageText, question, completeAnswer);
-
-                if (sonnetResult is not null)
-                {
-                    focusedText = sonnetResult;
-                    logger.LogInformation("Focus succeeded: {FocusLen} chars", focusedText.Length);
-                }
-                else
-                {
-                    logger.LogWarning("Focus returned null — using original citedText ({Len} chars)",
-                        citation.CitedText.Length);
-                }
+                logger.LogInformation("Page {Page}: NO_MATCH — no clear source text found", pageNumber);
+                continue;
             }
 
             var highlightAreas = transformer.ToHighlightAreas(
-                focusedText, citation.PageNumber, pageBounds);
+                focusedText, pageNumber, pageBounds);
 
-            logger.LogDebug(
-                "Citation page={Page}: focused {OrigLen}→{FocusLen} chars, {Count} highlight areas",
-                citation.PageNumber, citation.CitedText.Length, focusedText.Length, highlightAreas.Count);
+            logger.LogInformation("Page {Page}: focused to {FocusLen} chars, {AreaCount} highlight areas",
+                pageNumber, focusedText.Length, highlightAreas.Count);
 
             yield return new AnswerStreamEvent.CitationReceived(
-                citation with
-                {
-                    DocumentId = documentId,
-                    CitedText = focusedText,
-                    HighlightAreas = highlightAreas,
-                });
+                new Citation(
+                    DocumentId: documentId,
+                    DocumentName: doc.FileName,
+                    PageNumber: pageNumber,
+                    CitedText: focusedText,
+                    HighlightAreas: highlightAreas));
         }
 
         yield return new AnswerStreamEvent.Done();

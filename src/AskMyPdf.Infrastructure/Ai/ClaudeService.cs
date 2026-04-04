@@ -3,7 +3,6 @@ namespace AskMyPdf.Infrastructure.Ai;
 using Anthropic;
 using Anthropic.Models.Messages;
 using AskMyPdf.Core.Models;
-using AskMyPdf.Infrastructure.Pdf;
 using Microsoft.Extensions.Logging;
 
 public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger)
@@ -24,16 +23,20 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
         """;
 
     private const string FocusPromptTemplate = """
-        You are given a passage from a document page. The user asked a question and received an answer.
+        You are given a passage from a document page. A user asked a question and an AI produced an answer based on this passage.
 
         Question: {0}
         Answer: {1}
 
-        Your task: identify which sentence(s) from the passage were used to produce the answer.
+        Your task is to extract the exact parts of the passage that directly support the answer.
 
-        Rules:
-        Return ONLY the exact, verbatim sentence(s) copied character-for-character from the passage that were used to create the answer
-        
+        Instructions:
+
+        1. Find ALL parts of the passage that were used to produce the answer — not just one, but every sentence, data row, or fragment that contributed
+        2. Copy each part character-for-character from the passage — do not paraphrase or modify wording
+        3. Return each extracted part on a new line
+        4. Do NOT include text that is unrelated to the answer
+        5. If the passage contains no information that supports the answer, return exactly: NO_MATCH
         """;
 
     public async IAsyncEnumerable<AnswerStreamEvent> StreamAnswerAsync(
@@ -141,27 +144,21 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
 
             resultText = resultText.Trim();
 
+            // Explicit "no match" from the LLM — the text doesn't contain a clear answer
+            if (resultText.Equals("NO_MATCH", StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInformation("Focus returned NO_MATCH — text doesn't explicitly answer the question");
+                return null;
+            }
+
             // Strip surrounding quotes that Sonnet sometimes adds despite instructions
             if ((resultText.StartsWith('"') && resultText.EndsWith('"')) ||
                 (resultText.StartsWith('\u201C') && resultText.EndsWith('\u201D')))
                 resultText = resultText[1..^1].Trim();
 
-            // Validate: result must exist as a dense substring of the source text
-            var denseResult = CoordinateTransformer.ToDense(resultText);
-            var denseCited = CoordinateTransformer.ToDense(citedText);
-
-            if (denseResult.Length >= 10 && denseCited.Contains(denseResult, StringComparison.Ordinal))
-            {
-                logger.LogInformation("Focus narrowed citation: {OrigLen}→{FocusLen} chars",
-                    citedText.Length, resultText.Length);
-                return resultText;
-            }
-
-            logger.LogWarning(
-                "Focus result NOT validated ({ResultLen} chars vs source {CitedLen} chars). First 100 chars of result: {Preview}",
-                resultText.Length, citedText.Length,
-                resultText.Length > 100 ? resultText[..100] : resultText);
-            return null;
+            logger.LogInformation("Focus returned {FocusLen} chars from page ({PageLen} chars)",
+                resultText.Length, citedText.Length);
+            return resultText;
         }
         catch (Exception ex)
         {

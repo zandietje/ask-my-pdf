@@ -32,9 +32,9 @@ public class CoordinateTransformer
     }
 
     /// <summary>
-    /// Matches cited text against page words using character-level dense matching.
-    /// Strips whitespace from both sides so tokenization differences vanish.
-    /// Falls back to per-line matching for non-contiguous text.
+    /// Matches cited text against page words. Tries dense substring matching first,
+    /// falls back to per-line, then per-word matching for two-column PDFs where
+    /// words from different columns are interleaved in PdfPig's word order.
     /// </summary>
     internal static List<int> FindMatchedWordIndices(string citedText, List<WordBoundingBox> words)
     {
@@ -56,50 +56,87 @@ public class CoordinateTransformer
 
         var densePageStr = pageBuilder.ToString();
 
-        // Try full cited text first (contiguous match)
+        // Try full cited text as one contiguous match (best case)
         var fullTarget = ToDense(citedText);
-        var matchedIndices = FindDenseSubstring(fullTarget, densePageStr, charToWord);
+        var matchedIndices = FindAllDenseOccurrences(fullTarget, densePageStr, charToWord);
         if (matchedIndices.Count > 0)
             return matchedIndices;
 
-        // Fall back: match each line independently (handles non-contiguous text)
+        // Per-line: try dense match, fall back to per-word for lines that fail
+        // (two-column PDFs interleave words from both columns in PdfPig order,
+        //  so right-column text like "ReactJS, React Native" isn't contiguous)
         var lines = citedText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length <= 1)
-            return [];
-
         var allMatched = new HashSet<int>();
+
         foreach (var line in lines)
         {
-            var lineTarget = ToDense(line);
-            if (lineTarget.Length == 0) continue;
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0) continue;
 
-            var lineMatches = FindDenseSubstring(lineTarget, densePageStr, charToWord);
-            foreach (var idx in lineMatches)
-                allMatched.Add(idx);
+            var lineMatches = FindAllDenseOccurrences(ToDense(trimmed), densePageStr, charToWord);
+            if (lineMatches.Count > 0)
+            {
+                foreach (var idx in lineMatches)
+                    allMatched.Add(idx);
+            }
+            else
+            {
+                foreach (var idx in MatchByWordText(trimmed, words))
+                    allMatched.Add(idx);
+            }
         }
 
-        if (allMatched.Count == 0)
-            return [];
-
-        return allMatched.Order().ToList();
+        return allMatched.Count > 0 ? allMatched.Order().ToList() : [];
     }
 
-    private static List<int> FindDenseSubstring(
+    private static List<int> FindAllDenseOccurrences(
         string target, string densePageStr, List<int> charToWord)
     {
         if (target.Length == 0 || target.Length > densePageStr.Length)
             return [];
 
-        var pos = densePageStr.IndexOf(target, StringComparison.Ordinal);
-        if (pos < 0)
+        var matched = new HashSet<int>();
+        var pos = 0;
+        while (pos <= densePageStr.Length - target.Length)
+        {
+            var found = densePageStr.IndexOf(target, pos, StringComparison.Ordinal);
+            if (found < 0) break;
+
+            for (var i = found; i < found + target.Length; i++)
+                matched.Add(charToWord[i]);
+
+            pos = found + target.Length;
+        }
+
+        return matched.Count > 0 ? matched.Order().ToList() : [];
+    }
+
+    private static List<int> MatchByWordText(string citedText, List<WordBoundingBox> words)
+    {
+        var tokens = new HashSet<string>();
+        foreach (var raw in citedText.Split(
+            [' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var clean = NormalizeToken(raw);
+            if (clean.Length >= 3)
+                tokens.Add(clean);
+        }
+
+        if (tokens.Count == 0)
             return [];
 
-        var matched = new HashSet<int>();
-        for (var i = pos; i < pos + target.Length; i++)
-            matched.Add(charToWord[i]);
+        var matched = new List<int>();
+        for (var i = 0; i < words.Count; i++)
+        {
+            if (tokens.Contains(NormalizeToken(words[i].Text)))
+                matched.Add(i);
+        }
 
-        return matched.Order().ToList();
+        return matched;
     }
+
+    private static string NormalizeToken(string word) =>
+        word.ToLowerInvariant().Trim(',', ':', ';', '(', ')', '"', '\'', '*');
 
     internal static string ToDense(string text)
     {
