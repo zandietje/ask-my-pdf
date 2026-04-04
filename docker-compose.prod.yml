@@ -1,0 +1,40 @@
+services:
+  ask-my-pdf:
+    image: ${IMAGE_TAG:-ghcr.io/zandit/plot-solutions-ask-my-pdf:latest}
+    container_name: ask-my-pdf
+    expose:
+      - "5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Anthropic__ApiKey=${ANTHROPIC_API_KEY}
+      - Database__Path=/data/askmypdf.db
+    volumes:
+      - askmypdf-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ask-my-pdf-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ask-my-pdf
+    restart: unless-stopped
+
+volumes:
+  askmypdf-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,105 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Server
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy deployment files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "docker-compose.prod.yml,Caddyfile"
+          target: ~/ask-my-pdf
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          IMAGE_TAG: ${{ env.REGISTRY }}/${{ github.repository }}:latest
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: GHCR_TOKEN,ANTHROPIC_API_KEY,IMAGE_TAG
+          script: |
+            cd ~/ask-my-pdf
+
+            # Log in to GHCR
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Pull latest image and restart
+            export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+            export IMAGE_TAG="$IMAGE_TAG"
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+
+            # Clean up old images
+            docker image prune -f
+
+            # Wait for health check
+            echo "Waiting for health check..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:5000/health > /dev/null 2>&1; then
+                echo "Application is healthy!"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Health check failed after 60s"
+            docker compose -f docker-compose.prod.yml logs ask-my-pdf --tail 50
+            exit 1
