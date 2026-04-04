@@ -51,8 +51,13 @@ export function AppLayout({
         onOpenSidebar={() => onSidebarOpenChange(true)}
       />
 
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {mobileTab === "chat" ? leftPanel : rightPanel}
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        <div className={mobileTab === "chat" ? "h-full" : "h-full absolute inset-0 invisible"}>
+          {leftPanel}
+        </div>
+        <div className={mobileTab === "pdf" ? "h-full" : "h-full absolute inset-0 invisible"}>
+          {rightPanel}
+        </div>
       </div>
 
       <MobileTabBar
