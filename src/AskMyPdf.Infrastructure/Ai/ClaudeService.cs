@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 
 public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger)
 {
+    private const string Model = "claude-sonnet-4-20250514";
+
     private const string GroundingPrompt = """
         You are a document Q&A assistant. Answer the user's question based ONLY on the provided document.
 
@@ -48,7 +50,7 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
 
         var parameters = new MessageCreateParams
         {
-            Model = "claude-sonnet-4-20250514",
+            Model = Model,
             MaxTokens = 4096,
             System = GroundingPrompt,
             Messages =
@@ -108,15 +110,11 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
     {
         try
         {
-            var userPrompt = $"""
-                {citedText}
-                """;
-
             var systemPrompt = string.Format(FocusPromptTemplate, question, fullAnswer);
 
             var parameters = new MessageCreateParams
             {
-                Model = "claude-sonnet-4-20250514",
+                Model = Model,
                 MaxTokens = 500,
                 System = systemPrompt,
                 Messages =
@@ -126,7 +124,7 @@ public class ClaudeService(AnthropicClient client, ILogger<ClaudeService> logger
                         Role = Role.User,
                         Content = new List<ContentBlockParam>
                         {
-                            new TextBlockParam(userPrompt),
+                            new TextBlockParam(citedText),
                         },
                     },
                 ],

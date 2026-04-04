@@ -150,54 +150,6 @@ public class CoordinateTransformer
     }
 
     /// <summary>
-    /// Extracts the most relevant line(s) from a broad citation using question keywords.
-    /// Claude's citations often cover entire sections — this narrows to the specific line(s)
-    /// that actually answer the question.
-    /// </summary>
-    public static string FocusCitedText(string citedText, string question)
-    {
-        var lines = citedText.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => l.Trim())
-            .Where(l => l.Length > 0)
-            .ToList();
-
-        // Single line or short text — use as-is
-        if (lines.Count <= 2)
-            return citedText;
-
-        // Extract meaningful keywords from the question (skip short/common words)
-        var stopWords = new HashSet<string> { "a", "an", "the", "is", "are", "was", "were", "what", "which",
-            "how", "who", "when", "where", "do", "does", "did", "in", "on", "at", "to", "for", "of", "and",
-            "or", "not", "it", "this", "that", "be", "my", "can", "will", "has", "have", "from", "with" };
-
-        var questionWords = question.ToLowerInvariant()
-            .Split([' ', '?', '!', '.', ','], StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length > 2 && !stopWords.Contains(w))
-            .ToHashSet();
-
-        if (questionWords.Count == 0)
-            return lines[0];
-
-        // Score each line by keyword overlap with the question
-        var scored = lines.Select(line =>
-        {
-            var lineWords = line.ToLowerInvariant()
-                .Split([' ', ',', '.', ':', ';', '-', '(', ')'], StringSplitOptions.RemoveEmptyEntries);
-            var score = lineWords.Count(lw =>
-                questionWords.Any(qw => lw.Contains(qw) || qw.Contains(lw)));
-            return (line, score);
-        }).ToList();
-
-        var maxScore = scored.Max(x => x.score);
-        if (maxScore == 0)
-            return lines[0]; // No keyword overlap — use first line
-
-        // Return all lines that scored highest (may be 1-2 lines)
-        var bestLines = scored.Where(x => x.score == maxScore).Select(x => x.line).ToList();
-        return string.Join("\n", bestLines);
-    }
-
-    /// <summary>
     /// Reconstructs readable text from the word bounding boxes on a page.
     /// Groups words into visual lines and joins with spaces/newlines.
     /// </summary>

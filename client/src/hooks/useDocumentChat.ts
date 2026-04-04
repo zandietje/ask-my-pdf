@@ -67,15 +67,19 @@ export function useDocumentChat() {
             else if (line.startsWith("data: ")) data = line.slice(6);
           }
 
-          if (eventType === "text-delta" && data) {
-            const parsed = JSON.parse(data);
-            text += parsed.text;
-          } else if (eventType === "citation" && data) {
-            const parsed = JSON.parse(data) as Citation;
-            citations = [...citations, parsed];
-          } else if (eventType === "error" && data) {
-            const errorData = JSON.parse(data);
-            text += "\n\nError: " + (errorData.error || "An error occurred.");
+          try {
+            if (eventType === "text-delta" && data) {
+              const parsed = JSON.parse(data);
+              text += parsed.text;
+            } else if (eventType === "citation" && data) {
+              const parsed = JSON.parse(data) as Citation;
+              citations = [...citations, parsed];
+            } else if (eventType === "error" && data) {
+              const errorData = JSON.parse(data);
+              text += "\n\nError: " + (errorData.error || "An error occurred.");
+            }
+          } catch {
+            // Malformed SSE data — skip this event
           }
 
           setMessages(prev =>

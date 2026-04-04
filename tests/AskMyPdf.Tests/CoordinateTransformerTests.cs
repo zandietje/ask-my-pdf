@@ -176,50 +176,6 @@ public class CoordinateTransformerTests
         _transformer.ToHighlightAreas("Hello", 5, pages).Should().BeEmpty();
     }
 
-    // --- FocusCitedText tests ---
-
-    [Fact]
-    public void FocusCitedText_ShortText_Returns_AsIs()
-    {
-        var result = CoordinateTransformer.FocusCitedText(
-            "Backend: .NET (required)", "what is required?");
-
-        result.Should().Be("Backend: .NET (required)");
-    }
-
-    [Fact]
-    public void FocusCitedText_Narrows_To_Relevant_Line()
-    {
-        var citedText = "Tech Stack\nBackend: .NET (required)\nFrontend: Your choice\nAI/LLM: Any model";
-
-        var result = CoordinateTransformer.FocusCitedText(citedText, "what is required for backend?");
-
-        result.Should().Contain("Backend");
-        result.Should().Contain(".NET");
-        result.Should().NotContain("Frontend");
-        result.Should().NotContain("AI/LLM");
-    }
-
-    [Fact]
-    public void FocusCitedText_No_Keyword_Match_Returns_First_Line()
-    {
-        var citedText = "Line one\nLine two\nLine three";
-
-        var result = CoordinateTransformer.FocusCitedText(citedText, "something completely unrelated xyz");
-
-        result.Should().Be("Line one");
-    }
-
-    [Fact]
-    public void FocusCitedText_TwoLines_Returns_AsIs()
-    {
-        var citedText = "Line one\nLine two";
-
-        var result = CoordinateTransformer.FocusCitedText(citedText, "anything");
-
-        result.Should().Be(citedText);
-    }
-
     // --- ToDense tests ---
 
     [Fact]

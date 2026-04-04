@@ -8,8 +8,8 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
     body: formData,
   });
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error ?? "Upload failed");
+    const err = await res.json().catch(() => null);
+    throw new Error(err?.error ?? "Upload failed");
   }
   return res.json();
 }
