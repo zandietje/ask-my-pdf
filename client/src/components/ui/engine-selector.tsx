@@ -55,7 +55,8 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
                   type="button"
                   onClick={() => onChange(engine.key)}
                   className={cn(
-                    "relative flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-150",
+                    "relative flex items-center justify-center rounded-md text-xs font-medium transition-colors duration-150",
+                    "px-2.5 py-1.5 md:px-3 md:gap-1.5",
                     isSelected
                       ? "text-primary"
                       : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
@@ -69,8 +70,8 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
                     />
                   )}
                   <span className="relative z-10 flex items-center justify-center gap-1.5">
-                    <Icon className="h-3 w-3 shrink-0" />
-                    <span>{meta.label}</span>
+                    <Icon className="h-3.5 w-3.5 md:h-3 md:w-3 shrink-0" />
+                    <span className="hidden md:inline">{meta.label}</span>
                   </span>
                 </button>
               </TooltipTrigger>

@@ -64,8 +64,8 @@ const SheetContent = React.forwardRef<
     >
       <SheetPrimitive.Title className="sr-only">Navigation</SheetPrimitive.Title>
       {children}
-      <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary z-10">
-        <X className="h-5 w-5" />
+      <SheetPrimitive.Close className="absolute right-3 top-3 flex items-center justify-center h-8 w-8 rounded-lg bg-secondary hover:bg-secondary/80 text-muted-foreground hover:text-foreground ring-offset-background transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 z-10">
+        <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>
