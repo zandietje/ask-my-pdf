@@ -4,345 +4,141 @@ using System.Globalization;
 using System.Text;
 using AskMyPdf.Core.Models;
 
+/// <summary>
+/// Matches cited text against the stored canonical page representation and
+/// converts matched token bounding boxes into viewer-ready highlight areas.
+///
+/// Because reading order is solved at ingestion time (via the DLA pipeline in
+/// BoundingBoxExtractor), matching is a simple normalized substring search —
+/// no spatial reordering or heuristic fallbacks needed at query time.
+/// </summary>
 public class CoordinateTransformer
 {
-    private const double LineTolerance = 2.0; // PDF units — words within this Y-distance are on the same line
+    private const double LineTolerance = 2.0; // PDF units — tokens within this Y-distance are on the same line
 
     /// <summary>
     /// Finds highlight areas for the cited text on the given page.
-    /// Uses character-level dense matching to handle tokenization differences.
-    /// When <paramref name="contiguousOnly"/> is true, uses spatial ordering and
-    /// contiguous matching for engines that return exact document snippets.
+    /// Searches against the stored canonical text using normalized substring matching.
     /// </summary>
     public List<HighlightArea> ToHighlightAreas(
         string citedText,
         int pageNumber,
-        List<PageBoundingData> pages,
-        bool contiguousOnly = false)
+        List<PageCanonicalData> pages)
     {
         var page = pages.FirstOrDefault(p => p.PageNumber == pageNumber);
-        if (page is null || page.Words.Count == 0)
+        if (page is null || page.Tokens.Count == 0)
             return [];
 
         if (string.IsNullOrWhiteSpace(citedText))
             return [];
 
-        var matchedIndices = contiguousOnly
-            ? FindContiguousMatch(citedText, page.Words)
-            : FindMatchedWordIndices(citedText, page.Words);
-
-        if (matchedIndices.Count == 0)
-            return [];
-
-        var matchedWords = matchedIndices.Select(i => page.Words[i]).ToList();
-        return GroupIntoHighlightAreas(matchedWords, page, pageNumber);
-    }
-
-    /// <summary>
-    /// Spatially-aware matching for exact snippets (CLI engine).
-    /// 1. Reorders words spatially (by visual line, left-to-right) for two-column support.
-    /// 2. Tries contiguous dense matching with Unicode normalization.
-    /// 3. Falls back to per-word matching bounded to the tightest spatial region.
-    /// </summary>
-    internal static List<int> FindContiguousMatch(string citedText, List<WordBoundingBox> words)
-    {
-        // Build spatially-ordered word list: group by Y (line), sort by X within each line.
-        var ordered = BuildSpatialOrder(words);
-
-        // Build dense string from spatially-ordered words (with diacritics stripped)
-        var pageBuilder = new StringBuilder();
-        var charToOriginal = new List<int>();
-
-        foreach (var (word, originalIndex) in ordered)
-        {
-            foreach (var ch in NormalizeChar(word.Text))
-            {
-                pageBuilder.Append(ch);
-                charToOriginal.Add(originalIndex);
-            }
-        }
-
-        var densePageStr = pageBuilder.ToString();
+        // Build dense normalized string from canonical text with char→token mapping
+        var (denseText, charToToken) = BuildDenseMapping(page);
         var target = ToDenseNormalized(citedText);
 
-        // Strategy 1: full contiguous match
-        var matchedIndices = FindFirstDenseOccurrence(target, densePageStr, charToOriginal);
-        if (matchedIndices.Count > 0)
-            return matchedIndices;
+        // Strategy 1: full substring match
+        var matchedTokenIndices = FindDenseMatch(target, denseText, charToToken);
 
-        // Strategy 2: per-line contiguous match (multi-line snippets)
-        var snippetLines = citedText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        if (snippetLines.Length > 1)
+        // Strategy 2: per-line match (for multi-line citations containing \n)
+        if (matchedTokenIndices.Count == 0)
         {
-            var allMatched = new HashSet<int>();
-            foreach (var line in snippetLines)
+            var lines = citedText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length > 1)
             {
-                var trimmed = line.Trim();
-                if (trimmed.Length == 0) continue;
-                var lineMatches = FindFirstDenseOccurrence(
-                    ToDenseNormalized(trimmed), densePageStr, charToOriginal);
-                foreach (var idx in lineMatches)
-                    allMatched.Add(idx);
-            }
-            if (allMatched.Count > 0)
-                return allMatched.Order().ToList();
-        }
-
-        // Strategy 3: per-word matching, bounded to the tightest spatial cluster.
-        // Matches individual words but keeps only the smallest contiguous run of
-        // word indices that contains a majority of matches — avoids scattered highlights.
-        return FindBoundedWordMatch(citedText, words, ordered);
-    }
-
-    /// <summary>
-    /// Per-word matching with spatial bounding: matches individual tokens, then finds
-    /// the shortest contiguous span of word indices containing most matches.
-    /// This avoids scattered highlights while still working when dense matching fails
-    /// due to character-level differences between text extraction engines.
-    /// </summary>
-    private static List<int> FindBoundedWordMatch(
-        string citedText,
-        List<WordBoundingBox> words,
-        List<(WordBoundingBox Word, int OriginalIndex)> spatialOrder)
-    {
-        // Collect tokens from the snippet (4+ chars, normalized)
-        var tokens = new HashSet<string>();
-        foreach (var raw in citedText.Split(
-            [' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            var clean = NormalizeToken(raw);
-            if (clean.Length >= 4)
-                tokens.Add(clean);
-        }
-        if (tokens.Count == 0)
-            return [];
-
-        // Find which words in spatial order match any token
-        var matchFlags = new bool[spatialOrder.Count];
-        var matchCount = 0;
-        for (var i = 0; i < spatialOrder.Count; i++)
-        {
-            if (tokens.Contains(NormalizeToken(spatialOrder[i].Word.Text)))
-            {
-                matchFlags[i] = true;
-                matchCount++;
-            }
-        }
-        if (matchCount == 0)
-            return [];
-
-        // Find the shortest window in spatial order that contains ≥ 70% of matched words.
-        // This concentrates the highlight on the actual passage.
-        var threshold = Math.Max(1, (int)(matchCount * 0.7));
-        var bestStart = 0;
-        var bestLen = spatialOrder.Count;
-        var windowMatches = 0;
-        var left = 0;
-
-        for (var right = 0; right < spatialOrder.Count; right++)
-        {
-            if (matchFlags[right]) windowMatches++;
-
-            while (windowMatches >= threshold)
-            {
-                var windowLen = right - left + 1;
-                if (windowLen < bestLen)
+                var all = new HashSet<int>();
+                foreach (var line in lines)
                 {
-                    bestStart = left;
-                    bestLen = windowLen;
+                    var lineDense = ToDenseNormalized(line.Trim());
+                    if (lineDense.Length == 0) continue;
+                    foreach (var idx in FindDenseMatch(lineDense, denseText, charToToken))
+                        all.Add(idx);
                 }
-                if (matchFlags[left]) windowMatches--;
-                left++;
+                matchedTokenIndices = all.Order().ToList();
             }
         }
 
-        // Return original indices of matched words within the best window only
-        var result = new List<int>();
-        for (var i = bestStart; i < bestStart + bestLen && i < spatialOrder.Count; i++)
-        {
-            if (matchFlags[i])
-                result.Add(spatialOrder[i].OriginalIndex);
-        }
-
-        return result.Count > 0 ? result.Order().ToList() : [];
-    }
-
-    /// <summary>
-    /// Builds a spatially-ordered word list: groups by visual line (Y), sorts left-to-right (X).
-    /// </summary>
-    private static List<(WordBoundingBox Word, int OriginalIndex)> BuildSpatialOrder(List<WordBoundingBox> words)
-    {
-        var sorted = words
-            .Select((w, i) => (Word: w, OriginalIndex: i))
-            .OrderBy(x => x.Word.Top)
-            .ToList();
-
-        var lines = new List<List<(WordBoundingBox Word, int OriginalIndex)>> { new() { sorted[0] } };
-        for (var i = 1; i < sorted.Count; i++)
-        {
-            if (Math.Abs(sorted[i].Word.Top - lines[^1][^1].Word.Top) <= LineTolerance)
-                lines[^1].Add(sorted[i]);
-            else
-                lines.Add([sorted[i]]);
-        }
-
-        return lines
-            .SelectMany(line => line.OrderBy(x => x.Word.Left))
-            .ToList();
-    }
-
-    /// <summary>
-    /// Finds the first dense occurrence of target in the page string.
-    /// Returns the original word indices that were matched.
-    /// </summary>
-    private static List<int> FindFirstDenseOccurrence(
-        string target, string densePageStr, List<int> charToWord)
-    {
-        if (target.Length == 0 || target.Length > densePageStr.Length)
+        if (matchedTokenIndices.Count == 0)
             return [];
 
-        var found = densePageStr.IndexOf(target, StringComparison.Ordinal);
-        if (found < 0)
+        var matchedTokens = matchedTokenIndices.Select(i => page.Tokens[i]).ToList();
+        return GroupIntoHighlightAreas(matchedTokens, page, pageNumber);
+    }
+
+    /// <summary>
+    /// Builds a dense normalized string from the canonical text and a mapping
+    /// from each dense char position to the token index it belongs to.
+    /// </summary>
+    private static (string DenseText, List<int> CharToToken) BuildDenseMapping(PageCanonicalData page)
+    {
+        var denseBuilder = new StringBuilder(page.CanonicalText.Length);
+        var charToToken = new List<int>(page.CanonicalText.Length);
+
+        // Build sorted token offset→index lookup for mapping chars to tokens
+        // Tokens are in reading order; we walk canonical text and assign each char
+        // to the token whose range [Offset, Offset+Text.Length) contains it.
+        var tokenIndex = 0;
+        var nextTokenStart = page.Tokens.Count > 1 ? page.Tokens[1].Offset : int.MaxValue;
+
+        for (var i = 0; i < page.CanonicalText.Length; i++)
+        {
+            // Advance to the correct token for this char position
+            while (tokenIndex < page.Tokens.Count - 1 && i >= nextTokenStart)
+            {
+                tokenIndex++;
+                nextTokenStart = tokenIndex < page.Tokens.Count - 1
+                    ? page.Tokens[tokenIndex + 1].Offset
+                    : int.MaxValue;
+            }
+
+            var ch = page.CanonicalText[i];
+
+            // Normalize: decompose, strip diacritics, skip whitespace/control, lowercase
+            foreach (var normalized in NormalizeChar(ch))
+            {
+                // Only map chars that fall within a token's text range
+                var token = page.Tokens[tokenIndex];
+                if (i >= token.Offset && i < token.Offset + token.Text.Length)
+                {
+                    denseBuilder.Append(normalized);
+                    charToToken.Add(tokenIndex);
+                }
+            }
+        }
+
+        return (denseBuilder.ToString(), charToToken);
+    }
+
+    /// <summary>
+    /// Finds the first occurrence of target in denseText and returns the
+    /// distinct token indices that the matched chars map to.
+    /// </summary>
+    private static List<int> FindDenseMatch(
+        string target, string denseText, List<int> charToToken)
+    {
+        if (target.Length == 0 || target.Length > denseText.Length)
+            return [];
+
+        var pos = denseText.IndexOf(target, StringComparison.Ordinal);
+        if (pos < 0)
             return [];
 
         var matched = new HashSet<int>();
-        for (var i = found; i < found + target.Length; i++)
-            matched.Add(charToWord[i]);
+        for (var i = pos; i < pos + target.Length && i < charToToken.Count; i++)
+            matched.Add(charToToken[i]);
 
         return matched.Order().ToList();
     }
 
     /// <summary>
-    /// Matches cited text against page words. Tries dense substring matching first,
-    /// falls back to per-line, then per-word matching for two-column PDFs where
-    /// words from different columns are interleaved in PdfPig's word order.
-    /// </summary>
-    internal static List<int> FindMatchedWordIndices(
-        string citedText, List<WordBoundingBox> words)
-    {
-        // Build dense page string + char-to-word-index map
-        var pageBuilder = new StringBuilder();
-        var charToWord = new List<int>();
-
-        for (var i = 0; i < words.Count; i++)
-        {
-            foreach (var ch in words[i].Text)
-            {
-                if (!char.IsWhiteSpace(ch) && !char.IsControl(ch))
-                {
-                    pageBuilder.Append(char.ToLowerInvariant(ch));
-                    charToWord.Add(i);
-                }
-            }
-        }
-
-        var densePageStr = pageBuilder.ToString();
-
-        // Try full cited text as one contiguous match (best case)
-        var fullTarget = ToDense(citedText);
-        var matchedIndices = FindAllDenseOccurrences(fullTarget, densePageStr, charToWord);
-        if (matchedIndices.Count > 0)
-            return matchedIndices;
-
-        // Per-line: try dense match, fall back to per-word for lines that fail
-        var lines = citedText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var allMatched = new HashSet<int>();
-
-        foreach (var line in lines)
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Length == 0) continue;
-
-            var lineMatches = FindAllDenseOccurrences(ToDense(trimmed), densePageStr, charToWord);
-            if (lineMatches.Count > 0)
-            {
-                foreach (var idx in lineMatches)
-                    allMatched.Add(idx);
-            }
-            else
-            {
-                foreach (var idx in MatchByWordText(trimmed, words))
-                    allMatched.Add(idx);
-            }
-        }
-
-        return allMatched.Count > 0 ? allMatched.Order().ToList() : [];
-    }
-
-    private static List<int> FindAllDenseOccurrences(
-        string target, string densePageStr, List<int> charToWord)
-    {
-        if (target.Length == 0 || target.Length > densePageStr.Length)
-            return [];
-
-        var matched = new HashSet<int>();
-        var pos = 0;
-        while (pos <= densePageStr.Length - target.Length)
-        {
-            var found = densePageStr.IndexOf(target, pos, StringComparison.Ordinal);
-            if (found < 0) break;
-
-            for (var i = found; i < found + target.Length; i++)
-                matched.Add(charToWord[i]);
-
-            pos = found + target.Length;
-        }
-
-        return matched.Count > 0 ? matched.Order().ToList() : [];
-    }
-
-    private static List<int> MatchByWordText(string citedText, List<WordBoundingBox> words)
-    {
-        var tokens = new HashSet<string>();
-        foreach (var raw in citedText.Split(
-            [' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries))
-        {
-            var clean = NormalizeToken(raw);
-            if (clean.Length >= 4)
-                tokens.Add(clean);
-        }
-
-        if (tokens.Count == 0)
-            return [];
-
-        var matched = new List<int>();
-        for (var i = 0; i < words.Count; i++)
-        {
-            if (tokens.Contains(NormalizeToken(words[i].Text)))
-                matched.Add(i);
-        }
-
-        return matched;
-    }
-
-    private static string NormalizeToken(string word) =>
-        StripDiacritics(word.ToLowerInvariant()).Trim(',', '.', ':', ';', '(', ')', '"', '\'', '*');
-
-    /// <summary>
-    /// Dense string for the original matching path (Anthropic engine).
-    /// Strips whitespace/control chars, lowercases. No diacritic stripping.
-    /// </summary>
-    internal static string ToDense(string text)
-    {
-        var sb = new StringBuilder(text.Length);
-        foreach (var ch in text)
-        {
-            if (!char.IsWhiteSpace(ch) && !char.IsControl(ch))
-                sb.Append(char.ToLowerInvariant(ch));
-        }
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Dense string with Unicode normalization for cross-engine matching (CLI engine).
-    /// Strips diacritics so "ë" (precomposed) matches "e" + combining diaeresis, etc.
+    /// Normalizes a string to a dense form: lowercase, diacritics stripped, whitespace removed.
     /// </summary>
     internal static string ToDenseNormalized(string text)
     {
         var sb = new StringBuilder(text.Length);
-        foreach (var ch in NormalizeChar(text))
+        foreach (var ch in text)
         {
-            sb.Append(ch);
+            foreach (var normalized in NormalizeChar(ch))
+                sb.Append(normalized);
         }
         return sb.ToString();
     }
@@ -350,61 +146,66 @@ public class CoordinateTransformer
     /// <summary>
     /// Yields normalized characters: lowercase, whitespace/control stripped, diacritics removed.
     /// </summary>
-    private static IEnumerable<char> NormalizeChar(string text)
+    private static IEnumerable<char> NormalizeChar(char ch)
     {
-        var decomposed = text.Normalize(NormalizationForm.FormD);
-        foreach (var ch in decomposed)
+        if (char.IsWhiteSpace(ch) || char.IsControl(ch))
+            yield break;
+
+        var decomposed = ch.ToString().Normalize(NormalizationForm.FormD);
+        foreach (var d in decomposed)
         {
-            if (char.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark)
+            if (char.GetUnicodeCategory(d) == UnicodeCategory.NonSpacingMark)
                 continue; // strip combining diacritics
-            if (char.IsWhiteSpace(ch) || char.IsControl(ch))
-                continue;
-            yield return char.ToLowerInvariant(ch);
+            yield return char.ToLowerInvariant(d);
         }
     }
 
-    /// <summary>Strips diacritics from text (e.g. ë → e, é → e).</summary>
-    private static string StripDiacritics(string text)
-    {
-        var decomposed = text.Normalize(NormalizationForm.FormD);
-        var sb = new StringBuilder(decomposed.Length);
-        foreach (var ch in decomposed)
-        {
-            if (char.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
-                sb.Append(ch);
-        }
-        return sb.ToString().Normalize(NormalizationForm.FormC);
-    }
-
-    internal static List<List<WordBoundingBox>> GroupWordsIntoLines(List<WordBoundingBox> words)
-        => PageTextBuilder.GroupWordsIntoLines(words);
-
-    public static string ReconstructPageText(PageBoundingData page)
-        => PageTextBuilder.ReconstructPageText(page);
-
+    /// <summary>
+    /// Groups matched tokens into visual lines and converts each line
+    /// to a viewer-ready highlight area with percentage coordinates.
+    /// </summary>
     internal static List<HighlightArea> GroupIntoHighlightAreas(
-        List<WordBoundingBox> matchedWords,
-        PageBoundingData page,
+        List<PageToken> matchedTokens,
+        PageCanonicalData page,
         int pageNumber)
     {
-        if (matchedWords.Count == 0)
+        if (matchedTokens.Count == 0)
             return [];
 
         var pageIndex = pageNumber - 1; // Viewer is 0-indexed
-        return GroupWordsIntoLines(matchedWords)
+        return GroupTokensIntoLines(matchedTokens)
             .Select(line => LineToHighlightArea(line, page, pageIndex))
             .ToList();
     }
 
+    /// <summary>Groups tokens by Y-coordinate proximity into visual lines.</summary>
+    internal static List<List<PageToken>> GroupTokensIntoLines(List<PageToken> tokens)
+    {
+        if (tokens.Count == 0) return [];
+
+        var sorted = tokens.OrderByDescending(t => t.Top).ThenBy(t => t.Left).ToList();
+        var lines = new List<List<PageToken>> { new() { sorted[0] } };
+
+        for (var i = 1; i < sorted.Count; i++)
+        {
+            if (Math.Abs(sorted[i].Top - lines[^1][^1].Top) <= LineTolerance)
+                lines[^1].Add(sorted[i]);
+            else
+                lines.Add([sorted[i]]);
+        }
+
+        return lines;
+    }
+
     private static HighlightArea LineToHighlightArea(
-        List<WordBoundingBox> lineWords,
-        PageBoundingData page,
+        List<PageToken> lineTokens,
+        PageCanonicalData page,
         int pageIndex)
     {
-        var minLeft = lineWords.Min(w => w.Left);
-        var maxRight = lineWords.Max(w => w.Right);
-        var minBottom = lineWords.Min(w => w.Bottom);
-        var maxTop = lineWords.Max(w => w.Top);
+        var minLeft = lineTokens.Min(t => t.Left);
+        var maxRight = lineTokens.Max(t => t.Right);
+        var minBottom = lineTokens.Min(t => t.Bottom);
+        var maxTop = lineTokens.Max(t => t.Top);
 
         // PdfPig: origin bottom-left, Y up → Viewer: origin top-left, Y down, percentages 0-100
         var leftPct = (minLeft / page.PageWidth) * 100;

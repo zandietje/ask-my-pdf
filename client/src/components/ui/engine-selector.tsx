@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import type { EngineInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Zap, BookOpen, Microscope } from "lucide-react";
+import { Zap, Microscope } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -20,11 +20,6 @@ const engineMeta: Record<string, { icon: typeof Zap; label: string; description:
     icon: Zap,
     label: "Quick",
     description: "Searches relevant passages via RAG",
-  },
-  anthropic: {
-    icon: BookOpen,
-    label: "Full",
-    description: "Reads entire document with Claude",
   },
   "claude-cli": {
     icon: Microscope,

@@ -34,10 +34,10 @@ public class SqliteDbTests : IAsyncLifetime
 
     private static readonly byte[] TestFileBytes = [0x25, 0x50, 0x44, 0x46, 0x01, 0x02, 0x03];
 
-    private static List<PageBoundingData> CreateBounds() =>
+    private static List<PageCanonicalData> CreatePageData() =>
     [
-        new(1, 612, 792, [new WordBoundingBox("Hello", 10, 100, 50, 112)]),
-        new(2, 612, 792, [new WordBoundingBox("World", 10, 200, 50, 212)]),
+        new(1, 612, 792, "Hello", [new PageToken("Hello", 0, 10, 100, 50, 112)]),
+        new(2, 612, 792, "World", [new PageToken("World", 0, 10, 200, 50, 212)]),
     ];
 
     [Fact]
@@ -51,7 +51,7 @@ public class SqliteDbTests : IAsyncLifetime
     public async Task SaveAndGetDocument_RoundTrips_AllFields()
     {
         var doc = CreateDoc();
-        await _docs.SaveDocumentAsync(doc, TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(doc, TestFileBytes, CreatePageData());
 
         var loaded = await _docs.GetDocumentAsync("test-id");
 
@@ -66,7 +66,7 @@ public class SqliteDbTests : IAsyncLifetime
     [Fact]
     public async Task GetFileAsync_Returns_ExactBytes()
     {
-        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreatePageData());
 
         var bytes = await _docs.GetFileAsync("test-id");
 
@@ -74,30 +74,32 @@ public class SqliteDbTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task GetPageBoundsAsync_Deserializes_WordBoundingBoxes()
+    public async Task GetPageDataAsync_Deserializes_PageTokens()
     {
-        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreatePageData());
 
-        var pages = await _docs.GetPageBoundsAsync("test-id");
+        var pages = await _docs.GetPageDataAsync("test-id");
 
         pages.Should().HaveCount(2);
         pages[0].PageNumber.Should().Be(1);
-        pages[0].Words.Should().HaveCount(1);
-        pages[0].Words[0].Text.Should().Be("Hello");
-        pages[0].Words[0].Left.Should().Be(10);
-        pages[1].Words[0].Text.Should().Be("World");
+        pages[0].CanonicalText.Should().Be("Hello");
+        pages[0].Tokens.Should().HaveCount(1);
+        pages[0].Tokens[0].Text.Should().Be("Hello");
+        pages[0].Tokens[0].Left.Should().Be(10);
+        pages[1].CanonicalText.Should().Be("World");
+        pages[1].Tokens[0].Text.Should().Be("World");
     }
 
     [Fact]
-    public async Task GetPageBoundsAsync_Filtered_Returns_OnlyRequestedPages()
+    public async Task GetPageDataAsync_Filtered_Returns_OnlyRequestedPages()
     {
-        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreatePageData());
 
-        var pages = await _docs.GetPageBoundsAsync("test-id", [2]);
+        var pages = await _docs.GetPageDataAsync("test-id", [2]);
 
         pages.Should().HaveCount(1);
         pages[0].PageNumber.Should().Be(2);
-        pages[0].Words[0].Text.Should().Be("World");
+        pages[0].Tokens[0].Text.Should().Be("World");
     }
 
     [Fact]
@@ -110,14 +112,14 @@ public class SqliteDbTests : IAsyncLifetime
     [Fact]
     public async Task DeleteDocumentAsync_RemovesAllData()
     {
-        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreatePageData());
 
         var deleted = await _docs.DeleteDocumentAsync("test-id");
 
         deleted.Should().BeTrue();
         (await _docs.GetDocumentAsync("test-id")).Should().BeNull();
         (await _docs.GetFileAsync("test-id")).Should().BeNull();
-        (await _docs.GetPageBoundsAsync("test-id")).Should().BeEmpty();
+        (await _docs.GetPageDataAsync("test-id")).Should().BeEmpty();
     }
 
     [Fact]
@@ -133,8 +135,8 @@ public class SqliteDbTests : IAsyncLifetime
         var older = new Document("a", "old.pdf", new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc), 1, 100);
         var newer = new Document("b", "new.pdf", new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc), 1, 200);
 
-        await _docs.SaveDocumentAsync(older, TestFileBytes, [new(1, 612, 792, [])]);
-        await _docs.SaveDocumentAsync(newer, TestFileBytes, [new(1, 612, 792, [])]);
+        await _docs.SaveDocumentAsync(older, TestFileBytes, [new PageCanonicalData(1, 612, 792, "", [])]);
+        await _docs.SaveDocumentAsync(newer, TestFileBytes, [new PageCanonicalData(1, 612, 792, "", [])]);
 
         var all = await _docs.GetAllDocumentsAsync();
 

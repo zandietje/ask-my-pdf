@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 
 public class DocumentRepository(DbConnectionFactory db)
 {
-    public async Task SaveDocumentAsync(Document doc, byte[] fileBytes, List<PageBoundingData> bounds)
+    public async Task SaveDocumentAsync(Document doc, byte[] fileBytes, List<PageCanonicalData> pages)
     {
         await using var conn = await db.OpenConnectionAsync();
         await using var tx = await conn.BeginTransactionAsync();
@@ -37,20 +37,21 @@ public class DocumentRepository(DbConnectionFactory db)
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Insert page bounds
-        foreach (var page in bounds)
+        // Insert page data (canonical text + tokens)
+        foreach (var page in pages)
         {
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = (SqliteTransaction)tx;
             cmd.CommandText = """
-                INSERT INTO page_bounds (document_id, page_number, page_width, page_height, words_json)
-                VALUES (@docId, @pageNum, @width, @height, @wordsJson)
+                INSERT INTO page_bounds (document_id, page_number, page_width, page_height, canonical_text, tokens_json)
+                VALUES (@docId, @pageNum, @width, @height, @canonicalText, @tokensJson)
                 """;
             cmd.Parameters.AddWithValue("@docId", doc.Id);
             cmd.Parameters.AddWithValue("@pageNum", page.PageNumber);
             cmd.Parameters.AddWithValue("@width", page.PageWidth);
             cmd.Parameters.AddWithValue("@height", page.PageHeight);
-            cmd.Parameters.AddWithValue("@wordsJson", JsonSerializer.Serialize(page.Words));
+            cmd.Parameters.AddWithValue("@canonicalText", page.CanonicalText);
+            cmd.Parameters.AddWithValue("@tokensJson", JsonSerializer.Serialize(page.Tokens));
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -124,7 +125,7 @@ public class DocumentRepository(DbConnectionFactory db)
         return result as byte[];
     }
 
-    public async Task<List<PageBoundingData>> GetPageBoundsAsync(string documentId, IReadOnlyList<int> pageNumbers)
+    public async Task<List<PageCanonicalData>> GetPageDataAsync(string documentId, IReadOnlyList<int> pageNumbers)
     {
         if (pageNumbers.Count == 0) return [];
 
@@ -132,31 +133,31 @@ public class DocumentRepository(DbConnectionFactory db)
 
         var paramNames = pageNumbers.Select((_, i) => $"@p{i}").ToList();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"SELECT page_number, page_width, page_height, words_json FROM page_bounds WHERE document_id = @docId AND page_number IN ({string.Join(", ", paramNames)}) ORDER BY page_number";
+        cmd.CommandText = $"SELECT page_number, page_width, page_height, canonical_text, tokens_json FROM page_bounds WHERE document_id = @docId AND page_number IN ({string.Join(", ", paramNames)}) ORDER BY page_number";
         cmd.Parameters.AddWithValue("@docId", documentId);
         for (var i = 0; i < pageNumbers.Count; i++)
             cmd.Parameters.AddWithValue(paramNames[i], pageNumbers[i]);
 
-        var pages = new List<PageBoundingData>();
+        var pages = new List<PageCanonicalData>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-            pages.Add(ReadPageBounds(reader));
+            pages.Add(ReadPageData(reader));
 
         return pages;
     }
 
-    public async Task<List<PageBoundingData>> GetPageBoundsAsync(string documentId)
+    public async Task<List<PageCanonicalData>> GetPageDataAsync(string documentId)
     {
         await using var conn = await db.OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT page_number, page_width, page_height, words_json FROM page_bounds WHERE document_id = @docId ORDER BY page_number";
+        cmd.CommandText = "SELECT page_number, page_width, page_height, canonical_text, tokens_json FROM page_bounds WHERE document_id = @docId ORDER BY page_number";
         cmd.Parameters.AddWithValue("@docId", documentId);
 
-        var pages = new List<PageBoundingData>();
+        var pages = new List<PageCanonicalData>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-            pages.Add(ReadPageBounds(reader));
+            pages.Add(ReadPageData(reader));
 
         return pages;
     }
@@ -168,13 +169,14 @@ public class DocumentRepository(DbConnectionFactory db)
             reader.GetInt32(3),
             reader.GetInt64(4));
 
-    private static PageBoundingData ReadPageBounds(SqliteDataReader reader)
+    private static PageCanonicalData ReadPageData(SqliteDataReader reader)
     {
-        var words = JsonSerializer.Deserialize<List<WordBoundingBox>>(reader.GetString(3)) ?? [];
-        return new PageBoundingData(
+        var tokens = JsonSerializer.Deserialize<List<PageToken>>(reader.GetString(4)) ?? [];
+        return new PageCanonicalData(
             reader.GetInt32(0),
             reader.GetDouble(1),
             reader.GetDouble(2),
-            words);
+            reader.GetString(3),
+            tokens);
     }
 }

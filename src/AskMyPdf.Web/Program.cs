@@ -20,17 +20,12 @@ builder.Services.AddSingleton<BoundingBoxExtractor>();
 builder.Services.AddSingleton<CoordinateTransformer>();
 builder.Services.AddScoped<DocumentService>();
 
-// AI — shared dependencies
+// AI — Anthropic client (shared by RAG engine)
 var apiKey = builder.Configuration["Anthropic:ApiKey"];
 if (string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException(
         "Anthropic:ApiKey is required. Set via user-secrets: dotnet user-secrets set \"Anthropic:ApiKey\" \"sk-ant-...\"");
 builder.Services.AddSingleton(new AnthropicClient(new Anthropic.Core.ClientOptions { ApiKey = apiKey }));
-builder.Services.AddSingleton(new ClaudeServiceOptions(
-    AnswerModel: builder.Configuration["Anthropic:AnswerModel"] ?? "claude-sonnet-4-20250514",
-    FocusModel: builder.Configuration["Anthropic:FocusModel"] ?? "claude-haiku-4-5-20251001"));
-builder.Services.AddSingleton<ClaudeService>();
-builder.Services.AddSingleton<ICitationFocuser>(sp => sp.GetRequiredService<ClaudeService>());
 
 // Embeddings — OpenAI (optional, enables hybrid vector+FTS5 retrieval)
 builder.Services.AddHttpClient<EmbeddingService>();
@@ -40,7 +35,7 @@ builder.Services.AddSingleton(new EmbeddingOptions(
     Dimensions: builder.Configuration.GetValue("OpenAI:Dimensions", 1536)));
 builder.Services.AddSingleton<EmbeddingService>();
 
-// Engine registration order determines UI button order: Quick → Full → Deep
+// Engine registration order determines UI button order: Quick → Deep
 
 // Engine 1 — RAG (Quick): hybrid FTS5 + vector retrieval, fastest responses
 var ragEnabled = builder.Configuration.GetValue<bool>("Rag:Enabled");
@@ -52,10 +47,7 @@ if (ragEnabled)
     builder.Services.AddSingleton<IAnswerEngine, RagAnswerEngine>();
 }
 
-// Engine 2 — Anthropic API (Full): sends entire PDF with native citations
-builder.Services.AddSingleton<IAnswerEngine, AnthropicAnswerEngine>();
-
-// Engine 3 — Claude Code CLI (Deep): thorough multi-pass analysis
+// Engine 2 — Claude Code CLI (Deep): thorough multi-pass analysis
 var cliEnabled = builder.Configuration.GetValue<bool>("ClaudeCli:Enabled");
 if (cliEnabled)
 {

@@ -36,7 +36,8 @@ public class DbConnectionFactory(string dbPath)
                 page_number INTEGER NOT NULL,
                 page_width REAL NOT NULL,
                 page_height REAL NOT NULL,
-                words_json TEXT NOT NULL,
+                canonical_text TEXT NOT NULL,
+                tokens_json TEXT NOT NULL,
                 PRIMARY KEY (document_id, page_number)
             );
 

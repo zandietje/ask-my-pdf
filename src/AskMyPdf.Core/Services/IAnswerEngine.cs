@@ -9,18 +9,11 @@ using AskMyPdf.Core.Models;
 /// </summary>
 public interface IAnswerEngine
 {
-    /// <summary>Human-readable name shown in the UI (e.g. "Anthropic API").</summary>
+    /// <summary>Human-readable name shown in the UI (e.g. "RAG (Hybrid)").</summary>
     string DisplayName { get; }
 
-    /// <summary>Wire key used in API requests (e.g. "anthropic", "claude-cli").</summary>
+    /// <summary>Wire key used in API requests (e.g. "rag", "claude-cli").</summary>
     string Key { get; }
-
-    /// <summary>
-    /// When true, QuestionService will run a focus-model pass on each citation to
-    /// narrow broad page-level text to exact supporting spans before bounding-box
-    /// resolution. Engines that already return exact snippets should return false.
-    /// </summary>
-    bool NeedsFocusing { get; }
 
     /// <summary>
     /// Produce raw answer events. Text deltas may arrive one-by-one (streaming) or

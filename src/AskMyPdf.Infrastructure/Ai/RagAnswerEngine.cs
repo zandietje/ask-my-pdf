@@ -24,7 +24,6 @@ public class RagAnswerEngine(
 {
     public string DisplayName => "RAG (Hybrid)";
     public string Key => "rag";
-    public bool NeedsFocusing => false;
 
     // Matches [C3], [C3, C7], [C3, C7, C12] — LLM sometimes comma-separates multiple refs
     private static readonly Regex ChunkCitationGroupPattern = new(@"\[C\d+(?:,\s*C\d+)*\]", RegexOptions.Compiled);

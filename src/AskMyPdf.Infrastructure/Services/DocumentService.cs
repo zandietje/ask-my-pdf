@@ -20,7 +20,7 @@ public class DocumentService(
     public async Task<Document> UploadAsync(byte[] pdfBytes, string fileName, long fileSize,
         CancellationToken ct = default)
     {
-        var pages = extractor.ExtractWordBounds(pdfBytes);
+        var pages = extractor.ExtractPages(pdfBytes);
 
         if (pages.Count > MaxPageCount)
             throw new InvalidOperationException(

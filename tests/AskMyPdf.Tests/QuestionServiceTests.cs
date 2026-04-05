@@ -38,19 +38,18 @@ public class QuestionServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task StreamAnswerAsync_WithNonFocusingEngine_YieldsTextAndResolvedCitations()
+    public async Task StreamAnswerAsync_YieldsTextAndResolvedCitations()
     {
         // Arrange: save a test document with known words
         var pdfBytes = TestPdfGenerator.CreateSimplePdf();
         var extractor = new BoundingBoxExtractor();
-        var pages = extractor.ExtractWordBounds(pdfBytes);
+        var pages = extractor.ExtractPages(pdfBytes);
         var doc = new Document("test-id", "test.pdf", DateTime.UtcNow, pages.Count, pdfBytes.Length);
         await _documents.SaveDocumentAsync(doc, pdfBytes, pages);
 
         // Create a mock engine that returns known text + citation
         var mockEngine = new MockAnswerEngine(
             key: "mock",
-            needsFocusing: false,
             events:
             [
                 new AnswerStreamEvent.TextDelta("The answer is 42."),
@@ -62,7 +61,7 @@ public class QuestionServiceTests : IAsyncLifetime
             ]);
 
         var svc = new QuestionService(
-            [mockEngine], new MockCitationFocuser(), _documents, _transformer,
+            [mockEngine], _documents, _transformer,
             NullLogger<QuestionService>.Instance);
 
         // Act
@@ -84,55 +83,11 @@ public class QuestionServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task StreamAnswerAsync_WithFocusingEngine_RunsFocusAndResolvesHighlights()
-    {
-        // Arrange
-        var pdfBytes = TestPdfGenerator.CreateSimplePdf();
-        var extractor = new BoundingBoxExtractor();
-        var pages = extractor.ExtractWordBounds(pdfBytes);
-        var doc = new Document("test-id", "test.pdf", DateTime.UtcNow, pages.Count, pdfBytes.Length);
-        await _documents.SaveDocumentAsync(doc, pdfBytes, pages);
-
-        var mockEngine = new MockAnswerEngine(
-            key: "mock-focus",
-            needsFocusing: true,
-            events:
-            [
-                new AnswerStreamEvent.TextDelta("Focused answer."),
-                new AnswerStreamEvent.CitationReceived(new Citation(
-                    DocumentId: "", DocumentName: "test.pdf",
-                    PageNumber: 1, CitedText: "Full page text here",
-                    HighlightAreas: [])),
-                new AnswerStreamEvent.Done(),
-            ]);
-
-        // Focuser returns a known snippet that exists in the test PDF
-        var mockFocuser = new MockCitationFocuser { FocusResult = "Hello World" };
-
-        var svc = new QuestionService(
-            [mockEngine], mockFocuser, _documents, _transformer,
-            NullLogger<QuestionService>.Instance);
-
-        // Act
-        var events = new List<AnswerStreamEvent>();
-        await foreach (var evt in svc.StreamAnswerAsync("What?", "test-id", "mock-focus"))
-            events.Add(evt);
-
-        // Assert
-        mockFocuser.CallCount.Should().BeGreaterThan(0, "focuser should be called for NeedsFocusing engines");
-
-        var citation = events.OfType<AnswerStreamEvent.CitationReceived>().FirstOrDefault();
-        citation.Should().NotBeNull();
-        citation!.Citation.CitedText.Should().Be("Hello World");
-        citation.Citation.HighlightAreas.Should().NotBeEmpty();
-    }
-
-    [Fact]
     public async Task StreamAnswerAsync_DocumentNotFound_YieldsErrorText()
     {
-        var mockEngine = new MockAnswerEngine("mock", false, []);
+        var mockEngine = new MockAnswerEngine("mock", []);
         var svc = new QuestionService(
-            [mockEngine], new MockCitationFocuser(), _documents, _transformer,
+            [mockEngine], _documents, _transformer,
             NullLogger<QuestionService>.Instance);
 
         var events = new List<AnswerStreamEvent>();
@@ -150,18 +105,18 @@ public class QuestionServiceTests : IAsyncLifetime
         // Arrange: save a document
         var pdfBytes = TestPdfGenerator.CreateSimplePdf();
         var extractor = new BoundingBoxExtractor();
-        var pages = extractor.ExtractWordBounds(pdfBytes);
+        var pages = extractor.ExtractPages(pdfBytes);
         var doc = new Document("test-id", "test.pdf", DateTime.UtcNow, pages.Count, pdfBytes.Length);
         await _documents.SaveDocumentAsync(doc, pdfBytes, pages);
 
-        var mockEngine = new MockAnswerEngine("mock", false,
+        var mockEngine = new MockAnswerEngine("mock",
         [
             new AnswerStreamEvent.TextDelta("I could not find an answer."),
             new AnswerStreamEvent.Done(),
         ]);
 
         var svc = new QuestionService(
-            [mockEngine], new MockCitationFocuser(), _documents, _transformer,
+            [mockEngine], _documents, _transformer,
             NullLogger<QuestionService>.Instance);
 
         // Act
@@ -177,11 +132,10 @@ public class QuestionServiceTests : IAsyncLifetime
 }
 
 // Test doubles — file-scoped so they're private to this file
-file class MockAnswerEngine(string key, bool needsFocusing, AnswerStreamEvent[] events) : IAnswerEngine
+file class MockAnswerEngine(string key, AnswerStreamEvent[] events) : IAnswerEngine
 {
     public string DisplayName => key;
     public string Key => key;
-    public bool NeedsFocusing => needsFocusing;
 
     public async IAsyncEnumerable<AnswerStreamEvent> StreamRawAnswerAsync(
         string question, byte[] pdfBytes, string fileName, string documentId,
@@ -192,18 +146,5 @@ file class MockAnswerEngine(string key, bool needsFocusing, AnswerStreamEvent[] 
             yield return evt;
             await Task.Yield();
         }
-    }
-}
-
-file class MockCitationFocuser : ICitationFocuser
-{
-    public string? FocusResult { get; set; }
-    public int CallCount { get; private set; }
-
-    public Task<string?> FocusCitationAsync(
-        string pageText, string question, string fullAnswer, CancellationToken ct = default)
-    {
-        CallCount++;
-        return Task.FromResult(FocusResult);
     }
 }

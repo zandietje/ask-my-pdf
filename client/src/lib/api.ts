@@ -31,6 +31,6 @@ export async function deleteDocument(documentId: string): Promise<void> {
 
 export async function getEngines(): Promise<EngineInfo[]> {
   const res = await fetch("/api/engines");
-  if (!res.ok) return [{ key: "anthropic", name: "Anthropic API" }];
+  if (!res.ok) return [{ key: "rag", name: "RAG (Hybrid)" }];
   return res.json();
 }

@@ -15,7 +15,6 @@ public class ClaudeCliEngine(ClaudeCliRunner runner, ILogger<ClaudeCliEngine> lo
 {
     public string DisplayName => "Claude Code CLI";
     public string Key => "claude-cli";
-    public bool NeedsFocusing => false; // CLI prompt already produces exact snippets
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

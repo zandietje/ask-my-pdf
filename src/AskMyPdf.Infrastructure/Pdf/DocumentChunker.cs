@@ -8,14 +8,14 @@ public class DocumentChunker
     private const int TargetChunkSize = 150;   // characters — small so each chunk ≈ 1-2 sentences for precise highlighting
     private const int OverlapSize = 50;         // characters of overlap between chunks
 
-    public List<DocumentChunk> ChunkDocument(string documentId, List<PageBoundingData> pages)
+    public List<DocumentChunk> ChunkDocument(string documentId, List<PageCanonicalData> pages)
     {
         var chunks = new List<DocumentChunk>();
         var chunkIndex = 0;
 
         foreach (var page in pages)
         {
-            var pageText = PageTextBuilder.ReconstructPageText(page);
+            var pageText = page.CanonicalText;
             if (string.IsNullOrWhiteSpace(pageText))
                 continue;
 
