@@ -9,9 +9,13 @@ using Microsoft.AspNetCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Infrastructure
+// Infrastructure — database
 var dbPath = builder.Configuration["Database:Path"] ?? "askmypdf.db";
-builder.Services.AddSingleton(new SqliteDb(dbPath));
+var dbFactory = new DbConnectionFactory(dbPath);
+builder.Services.AddSingleton(dbFactory);
+builder.Services.AddSingleton<DocumentRepository>();
+builder.Services.AddSingleton<ChunkRepository>();
+
 builder.Services.AddSingleton<BoundingBoxExtractor>();
 builder.Services.AddSingleton<CoordinateTransformer>();
 builder.Services.AddScoped<DocumentService>();
@@ -26,6 +30,7 @@ builder.Services.AddSingleton(new ClaudeServiceOptions(
     AnswerModel: builder.Configuration["Anthropic:AnswerModel"] ?? "claude-sonnet-4-20250514",
     FocusModel: builder.Configuration["Anthropic:FocusModel"] ?? "claude-haiku-4-5-20251001"));
 builder.Services.AddSingleton<ClaudeService>();
+builder.Services.AddSingleton<ICitationFocuser>(sp => sp.GetRequiredService<ClaudeService>());
 
 // Embeddings — OpenAI (optional, enables hybrid vector+FTS5 retrieval)
 builder.Services.AddHttpClient<EmbeddingService>();
@@ -86,7 +91,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 // Initialize database
-await app.Services.GetRequiredService<SqliteDb>().InitializeAsync();
+await app.Services.GetRequiredService<DbConnectionFactory>().InitializeAsync();
 
 // Endpoints
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));

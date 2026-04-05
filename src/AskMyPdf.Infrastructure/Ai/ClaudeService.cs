@@ -4,9 +4,11 @@ using System.Runtime.CompilerServices;
 using Anthropic;
 using Anthropic.Models.Messages;
 using AskMyPdf.Core.Models;
+using AskMyPdf.Core.Services;
 using Microsoft.Extensions.Logging;
 
 public class ClaudeService(AnthropicClient client, ClaudeServiceOptions options, ILogger<ClaudeService> logger)
+    : ICitationFocuser
 {
     private const string GroundingPrompt = """
         You are a document Q&A assistant. Answer the user's question based ONLY on the provided document.

@@ -4,15 +4,14 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using AskMyPdf.Core.Models;
 using AskMyPdf.Core.Services;
-using AskMyPdf.Infrastructure.Ai;
 using AskMyPdf.Infrastructure.Data;
 using AskMyPdf.Infrastructure.Pdf;
 using Microsoft.Extensions.Logging;
 
 public class QuestionService(
     IEnumerable<IAnswerEngine> engines,
-    ClaudeService claude,
-    SqliteDb db,
+    ICitationFocuser focuser,
+    DocumentRepository documents,
     CoordinateTransformer transformer,
     ILogger<QuestionService> logger)
 {
@@ -27,7 +26,7 @@ public class QuestionService(
         var engine = ResolveEngine(engineKey);
         logger.LogInformation("Using engine {Engine} for document {DocumentId}", engine.Key, documentId);
 
-        var doc = await db.GetDocumentAsync(documentId);
+        var doc = await documents.GetDocumentAsync(documentId);
         if (doc is null)
         {
             logger.LogWarning("Document {DocumentId} not found", documentId);
@@ -36,7 +35,7 @@ public class QuestionService(
             yield break;
         }
 
-        var pdfBytes = await db.GetFileAsync(documentId);
+        var pdfBytes = await documents.GetFileAsync(documentId);
         if (pdfBytes is null)
         {
             logger.LogWarning("File for document {DocumentId} not found", documentId);
@@ -85,7 +84,7 @@ public class QuestionService(
 
         if (citedPages.Count > 0)
         {
-            var pageBounds = await db.GetPageBoundsAsync(documentId, citedPages);
+            var pageBounds = await documents.GetPageBoundsAsync(documentId, citedPages);
 
             if (engine.NeedsFocusing)
             {
@@ -97,7 +96,7 @@ public class QuestionService(
                         return (Citation?)null;
 
                     var pageText = CoordinateTransformer.ReconstructPageText(page);
-                    var focusedText = await claude.FocusCitationAsync(
+                    var focusedText = await focuser.FocusCitationAsync(
                         pageText, question, completeAnswer, ct);
 
                     if (focusedText is null)

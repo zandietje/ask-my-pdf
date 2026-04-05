@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 /// chunk-ID citations ([C3]) that map deterministically to page highlights.
 /// </summary>
 public class RagAnswerEngine(
-    SqliteDb db,
+    ChunkRepository chunks,
     AnthropicClient client,
     EmbeddingService embeddings,
     RagEngineOptions options,
@@ -34,7 +34,7 @@ public class RagAnswerEngine(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         // 1. Retrieve relevant chunks via hybrid search
-        var allChunks = await db.GetAllChunksAsync(documentId);
+        var allChunks = await chunks.GetAllChunksAsync(documentId);
         if (allChunks.Count == 0)
         {
             yield return new AnswerStreamEvent.TextDelta(
@@ -120,15 +120,15 @@ public class RagAnswerEngine(
         var topK = options.TopK;
 
         // FTS5 search
-        var ftsTask = db.SearchChunksAsync(documentId, question, topK * 2);
+        var ftsTask = chunks.SearchChunksAsync(documentId, question, topK * 2);
 
         // Vector search (if embeddings are available)
         Task<List<(int ChunkIndex, double Score)>>? vectorTask = null;
-        if (embeddings.IsAvailable && await db.HasEmbeddingsAsync(documentId))
+        if (embeddings.IsAvailable && await chunks.HasEmbeddingsAsync(documentId))
         {
             var queryEmbedding = await embeddings.GenerateEmbeddingAsync(question, ct);
             if (queryEmbedding is not null)
-                vectorTask = db.VectorSearchAsync(documentId, queryEmbedding, topK * 2);
+                vectorTask = chunks.VectorSearchAsync(documentId, queryEmbedding, topK * 2);
         }
 
         var ftsResults = await ftsTask;

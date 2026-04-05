@@ -10,7 +10,8 @@ public class DocumentService(
     BoundingBoxExtractor extractor,
     DocumentChunker chunker,
     EmbeddingService embeddings,
-    SqliteDb db,
+    DocumentRepository documents,
+    ChunkRepository chunks,
     ILogger<DocumentService> logger)
 {
     private const int MaxPageCount = 100;
@@ -31,18 +32,18 @@ public class DocumentService(
             PageCount: pages.Count,
             FileSize: fileSize);
 
-        await db.SaveDocumentAsync(doc, pdfBytes, pages);
+        await documents.SaveDocumentAsync(doc, pdfBytes, pages);
 
         // Index chunks for RAG engine
-        var chunks = chunker.ChunkDocument(doc.Id, pages);
-        if (chunks.Count > 0)
+        var chunkList = chunker.ChunkDocument(doc.Id, pages);
+        if (chunkList.Count > 0)
         {
-            await db.SaveChunksAsync(doc.Id, chunks);
+            await chunks.SaveChunksAsync(doc.Id, chunkList);
 
             // Generate vector embeddings (if OpenAI is configured)
             if (embeddings.IsAvailable)
             {
-                await GenerateAndSaveEmbeddingsAsync(doc.Id, chunks);
+                await GenerateAndSaveEmbeddingsAsync(doc.Id, chunkList);
             }
             else
             {
@@ -53,16 +54,28 @@ public class DocumentService(
         return doc;
     }
 
-    private async Task GenerateAndSaveEmbeddingsAsync(string documentId, List<DocumentChunk> chunks)
+    public Task<List<Document>> GetAllAsync() =>
+        documents.GetAllDocumentsAsync();
+
+    public Task<Document?> GetByIdAsync(string id) =>
+        documents.GetDocumentAsync(id);
+
+    public Task<byte[]?> GetFileAsync(string documentId) =>
+        documents.GetFileAsync(documentId);
+
+    public Task<bool> DeleteAsync(string id) =>
+        documents.DeleteDocumentAsync(id);
+
+    private async Task GenerateAndSaveEmbeddingsAsync(string documentId, List<DocumentChunk> chunkList)
     {
         try
         {
             var allEmbeddings = new List<(int ChunkIndex, float[] Embedding)>();
 
             // Process in batches to avoid OpenAI rate limits
-            for (var i = 0; i < chunks.Count; i += EmbeddingBatchSize)
+            for (var i = 0; i < chunkList.Count; i += EmbeddingBatchSize)
             {
-                var batch = chunks.Skip(i).Take(EmbeddingBatchSize).ToList();
+                var batch = chunkList.Skip(i).Take(EmbeddingBatchSize).ToList();
                 var texts = batch.Select(c => c.ChunkText).ToList();
 
                 var vectors = await embeddings.GenerateEmbeddingsAsync(texts);
@@ -79,7 +92,7 @@ public class DocumentService(
                 }
             }
 
-            await db.SaveEmbeddingsAsync(documentId, allEmbeddings);
+            await chunks.SaveEmbeddingsAsync(documentId, allEmbeddings);
             logger.LogInformation("Generated and saved {Count} embeddings for document {DocId}",
                 allEmbeddings.Count, documentId);
         }

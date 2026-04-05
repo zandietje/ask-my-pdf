@@ -11,12 +11,14 @@ public class SqliteDbTests : IAsyncLifetime
     private readonly string _dbPath = Path.Combine(
         Path.GetTempPath(), $"askmypdf_test_{Guid.NewGuid():N}.db");
 
-    private SqliteDb _db = null!;
+    private DbConnectionFactory _dbFactory = null!;
+    private DocumentRepository _docs = null!;
 
     public async Task InitializeAsync()
     {
-        _db = new SqliteDb(_dbPath);
-        await _db.InitializeAsync();
+        _dbFactory = new DbConnectionFactory(_dbPath);
+        await _dbFactory.InitializeAsync();
+        _docs = new DocumentRepository(_dbFactory);
     }
 
     public Task DisposeAsync()
@@ -42,16 +44,16 @@ public class SqliteDbTests : IAsyncLifetime
     public async Task InitializeAsync_IsIdempotent()
     {
         // Second call should not throw
-        await _db.InitializeAsync();
+        await _dbFactory.InitializeAsync();
     }
 
     [Fact]
     public async Task SaveAndGetDocument_RoundTrips_AllFields()
     {
         var doc = CreateDoc();
-        await _db.SaveDocumentAsync(doc, TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(doc, TestFileBytes, CreateBounds());
 
-        var loaded = await _db.GetDocumentAsync("test-id");
+        var loaded = await _docs.GetDocumentAsync("test-id");
 
         loaded.Should().NotBeNull();
         loaded!.Id.Should().Be(doc.Id);
@@ -64,9 +66,9 @@ public class SqliteDbTests : IAsyncLifetime
     [Fact]
     public async Task GetFileAsync_Returns_ExactBytes()
     {
-        await _db.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
 
-        var bytes = await _db.GetFileAsync("test-id");
+        var bytes = await _docs.GetFileAsync("test-id");
 
         bytes.Should().BeEquivalentTo(TestFileBytes);
     }
@@ -74,9 +76,9 @@ public class SqliteDbTests : IAsyncLifetime
     [Fact]
     public async Task GetPageBoundsAsync_Deserializes_WordBoundingBoxes()
     {
-        await _db.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
 
-        var pages = await _db.GetPageBoundsAsync("test-id");
+        var pages = await _docs.GetPageBoundsAsync("test-id");
 
         pages.Should().HaveCount(2);
         pages[0].PageNumber.Should().Be(1);
@@ -89,9 +91,9 @@ public class SqliteDbTests : IAsyncLifetime
     [Fact]
     public async Task GetPageBoundsAsync_Filtered_Returns_OnlyRequestedPages()
     {
-        await _db.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
 
-        var pages = await _db.GetPageBoundsAsync("test-id", [2]);
+        var pages = await _docs.GetPageBoundsAsync("test-id", [2]);
 
         pages.Should().HaveCount(1);
         pages[0].PageNumber.Should().Be(2);
@@ -101,27 +103,27 @@ public class SqliteDbTests : IAsyncLifetime
     [Fact]
     public async Task GetDocumentAsync_NonExistent_ReturnsNull()
     {
-        var result = await _db.GetDocumentAsync("nonexistent");
+        var result = await _docs.GetDocumentAsync("nonexistent");
         result.Should().BeNull();
     }
 
     [Fact]
     public async Task DeleteDocumentAsync_RemovesAllData()
     {
-        await _db.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
+        await _docs.SaveDocumentAsync(CreateDoc(), TestFileBytes, CreateBounds());
 
-        var deleted = await _db.DeleteDocumentAsync("test-id");
+        var deleted = await _docs.DeleteDocumentAsync("test-id");
 
         deleted.Should().BeTrue();
-        (await _db.GetDocumentAsync("test-id")).Should().BeNull();
-        (await _db.GetFileAsync("test-id")).Should().BeNull();
-        (await _db.GetPageBoundsAsync("test-id")).Should().BeEmpty();
+        (await _docs.GetDocumentAsync("test-id")).Should().BeNull();
+        (await _docs.GetFileAsync("test-id")).Should().BeNull();
+        (await _docs.GetPageBoundsAsync("test-id")).Should().BeEmpty();
     }
 
     [Fact]
     public async Task DeleteDocumentAsync_NonExistent_ReturnsFalse()
     {
-        var result = await _db.DeleteDocumentAsync("nonexistent");
+        var result = await _docs.DeleteDocumentAsync("nonexistent");
         result.Should().BeFalse();
     }
 
@@ -131,10 +133,10 @@ public class SqliteDbTests : IAsyncLifetime
         var older = new Document("a", "old.pdf", new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc), 1, 100);
         var newer = new Document("b", "new.pdf", new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc), 1, 200);
 
-        await _db.SaveDocumentAsync(older, TestFileBytes, [new(1, 612, 792, [])]);
-        await _db.SaveDocumentAsync(newer, TestFileBytes, [new(1, 612, 792, [])]);
+        await _docs.SaveDocumentAsync(older, TestFileBytes, [new(1, 612, 792, [])]);
+        await _docs.SaveDocumentAsync(newer, TestFileBytes, [new(1, 612, 792, [])]);
 
-        var all = await _db.GetAllDocumentsAsync();
+        var all = await _docs.GetAllDocumentsAsync();
 
         all.Should().HaveCount(2);
         all[0].Id.Should().Be("b", "newer document should be first (DESC order)");

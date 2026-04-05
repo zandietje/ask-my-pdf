@@ -1,27 +1,30 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { PdfViewerPanel } from "@/components/pdf/PdfViewerPanel";
 import { UploadDropzone } from "@/components/upload/UploadDropzone";
 import { DocumentList } from "@/components/upload/DocumentList";
 import { useDocumentChat } from "@/hooks/useDocumentChat";
+import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { useIsMobile } from "@/hooks/useMediaQuery";
-import { uploadDocument, getDocuments, deleteDocument, getEngines } from "@/lib/api";
-import type { DocumentDto, ChatMessage, Citation, EngineInfo } from "@/lib/types";
+import { getEngines } from "@/lib/api";
+import type { Citation, EngineInfo } from "@/lib/types";
 import { EngineSelector } from "@/components/ui/engine-selector";
 import { FileSearch } from "lucide-react";
 import { SidebarHeader } from "@/components/layout/SidebarHeader";
 import type { MobileTab } from "@/components/layout/MobileTabBar";
 
 export function App() {
-  const [documents, setDocuments] = useState<DocumentDto[]>([]);
-  const [documentsLoading, setDocumentsLoading] = useState(true);
-  const [selectedDoc, setSelectedDoc] = useState<DocumentDto | null>(null);
+  const { messages, isLoading, sendMessage, clearMessages, restoreMessages } = useDocumentChat();
+
+  const {
+    documents, documentsLoading, selectedDoc,
+    handleUpload, handleSelectDoc, handleDeleteDoc,
+  } = useDocumentManager(messages, clearMessages, restoreMessages);
+
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [engines, setEngines] = useState<EngineInfo[]>([]);
   const [selectedEngine, setSelectedEngine] = useState<string>("rag");
-  const { messages, isLoading, sendMessage, clearMessages, restoreMessages } = useDocumentChat();
-  const chatCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
 
   // Mobile state
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
@@ -29,73 +32,39 @@ export function App() {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    getDocuments()
-      .then(setDocuments)
-      .catch(console.error)
-      .finally(() => setDocumentsLoading(false));
     getEngines()
       .then(setEngines)
       .catch(console.error);
   }, []);
 
-  const handleUpload = useCallback(async (file: File) => {
-    // Save current chat before switching to the new doc
-    if (selectedDoc && messages.length > 0) {
-      chatCacheRef.current.set(selectedDoc.id, messages);
-    }
-    const response = await uploadDocument(file);
-    const docs = await getDocuments();
-    setDocuments(docs);
-    const newDoc = docs.find(d => d.id === response.id);
+  const onUpload = useCallback(async (file: File) => {
+    const newDoc = await handleUpload(file);
     if (newDoc) {
-      setSelectedDoc(newDoc);
       setActiveCitation(null);
-      clearMessages();
       setSidebarOpen(false);
     }
-  }, [selectedDoc, messages, clearMessages]);
+  }, [handleUpload]);
 
-  const handleSelectDoc = useCallback((doc: DocumentDto) => {
-    if (doc.id !== selectedDoc?.id) {
-      // Save current chat history before switching
-      if (selectedDoc) {
-        chatCacheRef.current.set(selectedDoc.id, messages);
-      }
-      setSelectedDoc(doc);
+  const onSelectDoc = useCallback((doc: Parameters<typeof handleSelectDoc>[0]) => {
+    const switched = handleSelectDoc(doc);
+    if (switched) {
       setActiveCitation(null);
-      // Restore cached chat or start fresh
-      const cached = chatCacheRef.current.get(doc.id);
-      if (cached && cached.length > 0) {
-        restoreMessages(cached);
-      } else {
-        clearMessages();
-      }
       setSidebarOpen(false);
       setMobileTab("chat");
     }
-  }, [selectedDoc, messages, clearMessages, restoreMessages]);
+  }, [handleSelectDoc]);
 
   const handleSendMessage = useCallback((question: string) => {
     if (!selectedDoc) return;
     sendMessage(question, selectedDoc.id, selectedEngine);
   }, [selectedDoc, selectedEngine, sendMessage]);
 
-  const handleDeleteDoc = useCallback(async (doc: DocumentDto) => {
-    if (!window.confirm(`Delete "${doc.fileName}"? This cannot be undone.`)) return;
-    try {
-      await deleteDocument(doc.id);
-      chatCacheRef.current.delete(doc.id);
-      const docs = await getDocuments();
-      setDocuments(docs);
-      if (selectedDoc?.id === doc.id) {
-        setSelectedDoc(null);
-        setActiveCitation(null);
-        clearMessages();
-      }
-    } catch (err) {
-      console.error("Failed to delete document:", err);
+  const onDeleteDoc = useCallback(async (doc: Parameters<typeof handleDeleteDoc>[0]) => {
+    await handleDeleteDoc(doc);
+    if (selectedDoc?.id === doc.id) {
+      setActiveCitation(null);
     }
-  }, [selectedDoc, clearMessages]);
+  }, [handleDeleteDoc, selectedDoc]);
 
   const handleCitationClick = useCallback((citation: Citation) => {
     setActiveCitation({ ...citation });
@@ -112,7 +81,7 @@ export function App() {
 
       {/* Upload + Engine */}
       <div className="px-4 pt-4 pb-3 space-y-4 shrink-0">
-        <UploadDropzone onUpload={handleUpload} />
+        <UploadDropzone onUpload={onUpload} />
         <EngineSelector
           engines={engines}
           selected={selectedEngine}
@@ -129,8 +98,8 @@ export function App() {
           <DocumentList
             documents={documents}
             selectedId={selectedDoc?.id ?? null}
-            onSelect={handleSelectDoc}
-            onDelete={handleDeleteDoc}
+            onSelect={onSelectDoc}
+            onDelete={onDeleteDoc}
             isLoading={documentsLoading}
           />
         </div>
@@ -158,7 +127,7 @@ export function App() {
 
       {/* Setup (fixed) */}
       <div className="px-4 pt-4 pb-3 space-y-4 shrink-0">
-        <UploadDropzone onUpload={handleUpload} />
+        <UploadDropzone onUpload={onUpload} />
         <EngineSelector
           engines={engines}
           selected={selectedEngine}
@@ -175,8 +144,8 @@ export function App() {
           <DocumentList
             documents={documents}
             selectedId={selectedDoc?.id ?? null}
-            onSelect={handleSelectDoc}
-            onDelete={handleDeleteDoc}
+            onSelect={onSelectDoc}
+            onDelete={onDeleteDoc}
             isLoading={documentsLoading}
           />
         </div>

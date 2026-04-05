@@ -1,6 +1,5 @@
 namespace AskMyPdf.Web.Endpoints;
 
-using AskMyPdf.Infrastructure.Data;
 using AskMyPdf.Infrastructure.Services;
 using AskMyPdf.Web.Dtos;
 
@@ -53,31 +52,31 @@ public static class DocumentEndpoints
         })
         .DisableAntiforgery();
 
-        group.MapGet("/", async (SqliteDb db) =>
+        group.MapGet("/", async (DocumentService svc) =>
         {
-            var docs = await db.GetAllDocumentsAsync();
+            var docs = await svc.GetAllAsync();
             return Results.Ok(docs.Select(ToDto));
         });
 
-        group.MapGet("/{id}", async (string id, SqliteDb db) =>
+        group.MapGet("/{id}", async (string id, DocumentService svc) =>
         {
-            var doc = await db.GetDocumentAsync(id);
+            var doc = await svc.GetByIdAsync(id);
             return doc is null
                 ? Results.NotFound()
                 : Results.Ok(ToDto(doc));
         });
 
-        group.MapGet("/{id}/file", async (string id, SqliteDb db) =>
+        group.MapGet("/{id}/file", async (string id, DocumentService svc) =>
         {
-            var bytes = await db.GetFileAsync(id);
+            var bytes = await svc.GetFileAsync(id);
             return bytes is null
                 ? Results.NotFound()
                 : Results.File(bytes, "application/pdf");
         });
 
-        group.MapDelete("/{id}", async (string id, SqliteDb db) =>
+        group.MapDelete("/{id}", async (string id, DocumentService svc) =>
         {
-            var deleted = await db.DeleteDocumentAsync(id);
+            var deleted = await svc.DeleteAsync(id);
             return deleted ? Results.NoContent() : Results.NotFound();
         });
     }

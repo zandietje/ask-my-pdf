@@ -16,17 +16,19 @@ public class DocumentServiceTests : IAsyncLifetime
         Path.GetTempPath(), $"askmypdf_test_{Guid.NewGuid():N}.db");
 
     private DocumentService _svc = null!;
-    private SqliteDb _db = null!;
+    private DocumentRepository _docs = null!;
 
     public async Task InitializeAsync()
     {
-        _db = new SqliteDb(_dbPath);
-        await _db.InitializeAsync();
+        var dbFactory = new DbConnectionFactory(_dbPath);
+        await dbFactory.InitializeAsync();
+        _docs = new DocumentRepository(dbFactory);
+        var chunks = new ChunkRepository(dbFactory);
         // EmbeddingService with no API key → embeddings disabled, FTS5-only
         var embeddingOptions = new EmbeddingOptions();
         var embeddingService = new EmbeddingService(new HttpClient(), embeddingOptions, NullLogger<EmbeddingService>.Instance);
         _svc = new DocumentService(
-            new BoundingBoxExtractor(), new DocumentChunker(), embeddingService, _db,
+            new BoundingBoxExtractor(), new DocumentChunker(), embeddingService, _docs, chunks,
             NullLogger<DocumentService>.Instance);
     }
 
@@ -50,7 +52,7 @@ public class DocumentServiceTests : IAsyncLifetime
         doc.Id.Should().NotBeNullOrEmpty();
 
         // Verify persisted to database
-        var loaded = await _db.GetDocumentAsync(doc.Id);
+        var loaded = await _docs.GetDocumentAsync(doc.Id);
         loaded.Should().NotBeNull();
         loaded!.PageCount.Should().Be(2);
     }
