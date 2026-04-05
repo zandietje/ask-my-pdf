@@ -60,6 +60,23 @@ public class RagAnswerEngineTests
     }
 
     [Fact]
+    public void ExtractCitations_HandlesCommaSeparatedRefs()
+    {
+        var chunkMap = new Dictionary<int, DocumentChunk>
+        {
+            [3] = new("doc1", 2, 3, "Third chunk"),
+            [7] = new("doc1", 4, 7, "Seventh chunk"),
+            [12] = new("doc1", 5, 12, "Twelfth chunk"),
+        };
+
+        var answer = "Multiple sources [C3, C7] and another group [C7, C12].";
+        var citations = RagAnswerEngine.ExtractCitations(answer, chunkMap, "test.pdf", "doc1");
+
+        citations.Should().HaveCount(3); // C3, C7, C12 (C7 deduplicated)
+        citations.Select(c => c.ChunkIndex).Should().BeEquivalentTo([3, 7, 12]);
+    }
+
+    [Fact]
     public void ExtractCitations_NoCitations_ReturnsEmpty()
     {
         var chunkMap = new Dictionary<int, DocumentChunk>();

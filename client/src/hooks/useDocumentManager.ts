@@ -11,6 +11,9 @@ export function useDocumentManager(
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [selectedDoc, setSelectedDoc] = useState<DocumentDto | null>(null);
   const chatCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
+  // Always-latest messages ref — avoids stale closure when caching on doc switch
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   useEffect(() => {
     getDocuments()
@@ -21,8 +24,8 @@ export function useDocumentManager(
 
   const handleUpload = useCallback(async (file: File) => {
     // Save current chat before switching to the new doc
-    if (selectedDoc && messages.length > 0) {
-      chatCacheRef.current.set(selectedDoc.id, messages);
+    if (selectedDoc && messagesRef.current.length > 0) {
+      chatCacheRef.current.set(selectedDoc.id, [...messagesRef.current]);
     }
     const response = await uploadDocument(file);
     const docs = await getDocuments();
@@ -33,13 +36,13 @@ export function useDocumentManager(
       clearMessages();
     }
     return newDoc ?? null;
-  }, [selectedDoc, messages, clearMessages]);
+  }, [selectedDoc, clearMessages]);
 
   const handleSelectDoc = useCallback((doc: DocumentDto): boolean => {
     if (doc.id === selectedDoc?.id) return false;
-    // Save current chat history before switching
+    // Save current chat history before switching (use ref for always-latest)
     if (selectedDoc) {
-      chatCacheRef.current.set(selectedDoc.id, messages);
+      chatCacheRef.current.set(selectedDoc.id, [...messagesRef.current]);
     }
     setSelectedDoc(doc);
     // Restore cached chat or start fresh
@@ -50,7 +53,7 @@ export function useDocumentManager(
       clearMessages();
     }
     return true;
-  }, [selectedDoc, messages, clearMessages, restoreMessages]);
+  }, [selectedDoc, clearMessages, restoreMessages]);
 
   const handleDeleteDoc = useCallback(async (doc: DocumentDto) => {
     if (!window.confirm(`Delete "${doc.fileName}"? This cannot be undone.`)) return;

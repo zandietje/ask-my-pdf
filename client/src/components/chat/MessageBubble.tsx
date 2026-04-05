@@ -30,9 +30,9 @@ function deduplicateCitations(citations: Citation[]): Citation[] {
   return Array.from(byPage.values());
 }
 
-/** Strip inline [C<n>] chunk-ID references — citations are shown as evidence below. */
+/** Strip inline [C<n>] and [C3, C7] chunk-ID references — citations are shown as evidence below. */
 function stripChunkReferences(content: string): string {
-  return content.replace(/\s*\[C\d+\]/g, "");
+  return content.replace(/\s*\[C\d+(?:,\s*C\d+)*\]/g, "");
 }
 
 export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) {

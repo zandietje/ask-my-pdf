@@ -26,7 +26,9 @@ public class RagAnswerEngine(
     public string Key => "rag";
     public bool NeedsFocusing => false;
 
-    private static readonly Regex ChunkCitationPattern = new(@"\[C(\d+)\]", RegexOptions.Compiled);
+    // Matches [C3], [C3, C7], [C3, C7, C12] — LLM sometimes comma-separates multiple refs
+    private static readonly Regex ChunkCitationGroupPattern = new(@"\[C\d+(?:,\s*C\d+)*\]", RegexOptions.Compiled);
+    private static readonly Regex ChunkIdPattern = new(@"C(\d+)", RegexOptions.Compiled);
     private const int RrfK = 60; // Reciprocal rank fusion constant
 
     public async IAsyncEnumerable<AnswerStreamEvent> StreamRawAnswerAsync(
@@ -256,22 +258,27 @@ public class RagAnswerEngine(
         var seen = new HashSet<int>();
         var citations = new List<Core.Models.Citation>();
 
-        foreach (Match match in ChunkCitationPattern.Matches(answer))
+        // Find all bracket groups like [C3], [C3, C7], [C3, C7, C12]
+        foreach (Match groupMatch in ChunkCitationGroupPattern.Matches(answer))
         {
-            if (!int.TryParse(match.Groups[1].Value, out var chunkIndex))
-                continue;
-            if (!seen.Add(chunkIndex)) // deduplicate
-                continue;
-            if (!chunkMap.TryGetValue(chunkIndex, out var chunk))
-                continue;
+            // Extract individual C<n> IDs from within each bracket group
+            foreach (Match idMatch in ChunkIdPattern.Matches(groupMatch.Value))
+            {
+                if (!int.TryParse(idMatch.Groups[1].Value, out var chunkIndex))
+                    continue;
+                if (!seen.Add(chunkIndex)) // deduplicate
+                    continue;
+                if (!chunkMap.TryGetValue(chunkIndex, out var chunk))
+                    continue;
 
-            citations.Add(new Core.Models.Citation(
-                DocumentId: documentId,
-                DocumentName: fileName,
-                PageNumber: chunk.PageNumber,
-                CitedText: chunk.ChunkText,
-                HighlightAreas: [],
-                ChunkIndex: chunkIndex));
+                citations.Add(new Core.Models.Citation(
+                    DocumentId: documentId,
+                    DocumentName: fileName,
+                    PageNumber: chunk.PageNumber,
+                    CitedText: chunk.ChunkText,
+                    HighlightAreas: [],
+                    ChunkIndex: chunkIndex));
+            }
         }
 
         return citations;
