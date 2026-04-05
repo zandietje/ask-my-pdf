@@ -18,7 +18,7 @@ export function App() {
   const [selectedDoc, setSelectedDoc] = useState<DocumentDto | null>(null);
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [engines, setEngines] = useState<EngineInfo[]>([]);
-  const [selectedEngine, setSelectedEngine] = useState<string>("claude-cli");
+  const [selectedEngine, setSelectedEngine] = useState<string>("rag");
   const { messages, isLoading, sendMessage, clearMessages, restoreMessages } = useDocumentChat();
   const chatCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
 
