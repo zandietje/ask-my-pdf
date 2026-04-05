@@ -1,6 +1,6 @@
 import type { EngineInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Zap, Search, Library } from "lucide-react";
+import { Zap, BookOpen, Microscope } from "lucide-react";
 
 interface EngineSelectorProps {
   engines: EngineInfo[];
@@ -9,20 +9,20 @@ interface EngineSelectorProps {
 }
 
 const engineMeta: Record<string, { icon: typeof Zap; label: string; description: string }> = {
-  anthropic: {
+  rag: {
     icon: Zap,
     label: "Quick",
-    description: "Fast streaming responses",
+    description: "Searches relevant passages",
+  },
+  anthropic: {
+    icon: BookOpen,
+    label: "Full",
+    description: "Reads entire document",
   },
   "claude-cli": {
-    icon: Search,
+    icon: Microscope,
     label: "Deep",
-    description: "Thorough analysis",
-  },
-  rag: {
-    icon: Library,
-    label: "Smart",
-    description: "Retrieves & cites sources",
+    description: "Thorough exact analysis",
   },
 };
 

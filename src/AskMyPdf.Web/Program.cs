@@ -16,7 +16,7 @@ builder.Services.AddSingleton<BoundingBoxExtractor>();
 builder.Services.AddSingleton<CoordinateTransformer>();
 builder.Services.AddScoped<DocumentService>();
 
-// AI — Anthropic API engine (Engine A)
+// AI — shared dependencies
 var apiKey = builder.Configuration["Anthropic:ApiKey"];
 if (string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException(
@@ -26,19 +26,6 @@ builder.Services.AddSingleton(new ClaudeServiceOptions(
     AnswerModel: builder.Configuration["Anthropic:AnswerModel"] ?? "claude-sonnet-4-20250514",
     FocusModel: builder.Configuration["Anthropic:FocusModel"] ?? "claude-haiku-4-5-20251001"));
 builder.Services.AddSingleton<ClaudeService>();
-builder.Services.AddSingleton<IAnswerEngine, AnthropicAnswerEngine>();
-
-// AI — Claude Code CLI engine (Engine B)
-var cliEnabled = builder.Configuration.GetValue<bool>("ClaudeCli:Enabled");
-if (cliEnabled)
-{
-    builder.Services.AddSingleton(new ClaudeCliOptions(
-        BinaryPath: builder.Configuration["ClaudeCli:BinaryPath"] ?? "claude",
-        TimeoutSeconds: builder.Configuration.GetValue("ClaudeCli:TimeoutSeconds", 120),
-        MaxTurns: builder.Configuration.GetValue("ClaudeCli:MaxTurns", 5)));
-    builder.Services.AddSingleton<ClaudeCliRunner>();
-    builder.Services.AddSingleton<IAnswerEngine, ClaudeCliEngine>();
-}
 
 // Embeddings — OpenAI (optional, enables hybrid vector+FTS5 retrieval)
 builder.Services.AddHttpClient<EmbeddingService>();
@@ -48,7 +35,9 @@ builder.Services.AddSingleton(new EmbeddingOptions(
     Dimensions: builder.Configuration.GetValue("OpenAI:Dimensions", 1536)));
 builder.Services.AddSingleton<EmbeddingService>();
 
-// AI — RAG engine (Engine C) — hybrid FTS5 + vector retrieval
+// Engine registration order determines UI button order: Quick → Full → Deep
+
+// Engine 1 — RAG (Quick): hybrid FTS5 + vector retrieval, fastest responses
 var ragEnabled = builder.Configuration.GetValue<bool>("Rag:Enabled");
 if (ragEnabled)
 {
@@ -56,6 +45,21 @@ if (ragEnabled)
         Model: builder.Configuration["Rag:Model"] ?? "claude-sonnet-4-20250514",
         TopK: builder.Configuration.GetValue("Rag:TopK", 8)));
     builder.Services.AddSingleton<IAnswerEngine, RagAnswerEngine>();
+}
+
+// Engine 2 — Anthropic API (Full): sends entire PDF with native citations
+builder.Services.AddSingleton<IAnswerEngine, AnthropicAnswerEngine>();
+
+// Engine 3 — Claude Code CLI (Deep): thorough multi-pass analysis
+var cliEnabled = builder.Configuration.GetValue<bool>("ClaudeCli:Enabled");
+if (cliEnabled)
+{
+    builder.Services.AddSingleton(new ClaudeCliOptions(
+        BinaryPath: builder.Configuration["ClaudeCli:BinaryPath"] ?? "claude",
+        TimeoutSeconds: builder.Configuration.GetValue("ClaudeCli:TimeoutSeconds", 120),
+        MaxTurns: builder.Configuration.GetValue("ClaudeCli:MaxTurns", 5)));
+    builder.Services.AddSingleton<ClaudeCliRunner>();
+    builder.Services.AddSingleton<IAnswerEngine, ClaudeCliEngine>();
 }
 
 builder.Services.AddSingleton<DocumentChunker>();
