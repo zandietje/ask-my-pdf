@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import type { ChatMessage, Citation } from "@/lib/types";
 import { CitationChip } from "./CitationChip";
 import { MessageContent } from "./MessageContent";
@@ -88,30 +88,18 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
             <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
               Sources
             </span>
-            <motion.div
-              className="flex flex-wrap gap-1.5"
-              initial="hidden"
-              animate="visible"
-              variants={{
-                hidden: {},
-                visible: { transition: { staggerChildren: 0.05 } },
-              }}
-            >
-              <AnimatePresence>
-                {mergedCitations.map((citation, i) => (
-                  <motion.div
-                    key={`${citation.pageNumber}-${i}`}
-                    variants={{
-                      hidden: { opacity: 0, x: -8 },
-                      visible: { opacity: 1, x: 0 },
-                    }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                  >
-                    <CitationChip citation={citation} onClick={onCitationClick} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
+            <div className="flex flex-wrap gap-1.5">
+              {mergedCitations.map((citation, i) => (
+                <motion.div
+                  key={`${citation.pageNumber}-${i}`}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut", delay: i * 0.05 }}
+                >
+                  <CitationChip citation={citation} onClick={onCitationClick} />
+                </motion.div>
+              ))}
+            </div>
           </div>
         )}
       </div>

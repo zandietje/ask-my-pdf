@@ -50,13 +50,9 @@ export function useDocumentChat() {
       let text = "";
       let citations: Citation[] = [];
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+      const processEvents = (raw: string) => {
+        const parts = raw.split("\n\n");
+        const remainder = parts.pop() ?? "";
 
         for (const part of parts) {
           const lines = part.split("\n");
@@ -90,7 +86,31 @@ export function useDocumentChat() {
             )
           );
         }
+
+        return remainder;
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        buffer = processEvents(buffer);
       }
+
+      // Flush decoder and process any remaining buffered events
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        processEvents(buffer + "\n\n");
+      }
+
+      // Ensure message is finalized as not-streaming
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === assistantId
+            ? { ...m, content: text, citations, isStreaming: false }
+            : m
+        )
+      );
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setMessages(prev =>
