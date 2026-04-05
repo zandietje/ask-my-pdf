@@ -40,6 +40,13 @@ public class ClaudeCliEngine(ClaudeCliRunner runner, ILogger<ClaudeCliEngine> lo
             var prompt = BuildPrompt(tempPath, question);
             var result = await runner.RunAsync(prompt, workingDirectory: tempDir, ct: ct);
 
+            // Retry once on timeout or transient error (not on "failed to start" — CLI is missing)
+            if (!result.Success && result.Error is not null && !result.Error.Contains("Failed to start"))
+            {
+                logger.LogWarning("CLI engine failed (attempt 1): {Error} — retrying", result.Error);
+                result = await runner.RunAsync(prompt, workingDirectory: tempDir, ct: ct);
+            }
+
             if (!result.Success || result.ResultText is null)
             {
                 var errorMsg = result.Error ?? "Claude Code CLI did not return a result.";

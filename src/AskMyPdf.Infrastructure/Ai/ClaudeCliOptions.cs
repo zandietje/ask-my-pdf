@@ -4,4 +4,4 @@ namespace AskMyPdf.Infrastructure.Ai;
 public record ClaudeCliOptions(
     string BinaryPath = "claude",
     int TimeoutSeconds = 120,
-    int MaxTurns = 5);
+    int MaxTurns = 2);
