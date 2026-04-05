@@ -44,7 +44,7 @@ public class RagAnswerEngine(
         }
 
         var chunkMap = allChunks.ToDictionary(c => c.ChunkIndex);
-        var retrieved = await HybridRetrieveAsync(documentId, question, allChunks, ct);
+        var retrieved = await HybridRetrieveAsync(documentId, question, chunkMap, ct);
 
         if (retrieved.Count == 0)
         {
@@ -115,7 +115,7 @@ public class RagAnswerEngine(
     /// merges results with reciprocal rank fusion. Falls back to FTS5-only if no embeddings.
     /// </summary>
     private async Task<List<DocumentChunk>> HybridRetrieveAsync(
-        string documentId, string question, List<DocumentChunk> allChunks, CancellationToken ct)
+        string documentId, string question, Dictionary<int, DocumentChunk> chunkMap, CancellationToken ct)
     {
         var topK = options.TopK;
 
@@ -137,7 +137,7 @@ public class RagAnswerEngine(
         if (vectorResults is not null && vectorResults.Count > 0)
         {
             // Hybrid: merge with Reciprocal Rank Fusion
-            var merged = ReciprocalRankFusion(ftsResults, vectorResults, allChunks);
+            var merged = ReciprocalRankFusion(ftsResults, vectorResults, chunkMap);
             logger.LogInformation("RAG: hybrid retrieval — FTS5={FtsCount}, Vector={VecCount}, merged={MergedCount}",
                 ftsResults.Count, vectorResults.Count, merged.Count);
             return merged.Take(topK).ToList();
@@ -152,19 +152,18 @@ public class RagAnswerEngine(
 
         // Last resort: first N chunks
         logger.LogInformation("RAG: no search results, falling back to first {TopK} chunks", topK);
-        return allChunks.Take(topK).ToList();
+        return chunkMap.Values.OrderBy(c => c.ChunkIndex).Take(topK).ToList();
     }
 
     /// <summary>
     /// Reciprocal Rank Fusion: merges two ranked lists into one.
     /// RRF_score(d) = sum(1 / (k + rank_i(d))) for each retrieval system i.
     /// </summary>
-    private List<DocumentChunk> ReciprocalRankFusion(
+    private static List<DocumentChunk> ReciprocalRankFusion(
         List<DocumentChunk> ftsResults,
         List<(int ChunkIndex, double Score)> vectorResults,
-        List<DocumentChunk> allChunks)
+        Dictionary<int, DocumentChunk> chunkMap)
     {
-        var chunkMap = allChunks.ToDictionary(c => c.ChunkIndex);
         var scores = new Dictionary<int, double>();
 
         // FTS5 ranks (already ordered by BM25)

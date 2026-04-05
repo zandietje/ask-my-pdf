@@ -11,12 +11,9 @@ public class CoordinateTransformer
     /// <summary>
     /// Finds highlight areas for the cited text on the given page.
     /// Uses character-level dense matching to handle tokenization differences.
+    /// When <paramref name="contiguousOnly"/> is true, uses spatial ordering and
+    /// contiguous matching for engines that return exact document snippets.
     /// </summary>
-    /// <param name="contiguousOnly">
-    /// When true, uses spatial ordering and contiguous matching with a bounded
-    /// per-word fallback. Use for engines that return exact document snippets
-    /// (e.g. CLI engine) to highlight only the target passage.
-    /// </param>
     public List<HighlightArea> ToHighlightAreas(
         string citedText,
         int pageNumber,
@@ -221,11 +218,8 @@ public class CoordinateTransformer
     /// words from different columns are interleaved in PdfPig's word order.
     /// </summary>
     internal static List<int> FindMatchedWordIndices(
-        string citedText, List<WordBoundingBox> words, bool contiguousOnly = false)
+        string citedText, List<WordBoundingBox> words)
     {
-        if (contiguousOnly)
-            return FindContiguousMatch(citedText, words);
-
         // Build dense page string + char-to-word-index map
         var pageBuilder = new StringBuilder();
         var charToWord = new List<int>();

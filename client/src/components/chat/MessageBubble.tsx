@@ -39,10 +39,10 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
     [message.citations]
   );
 
-  // Strip [C<n>] references after streaming completes — citations shown as evidence below
+  // Strip [C<n>] references in real-time — citations shown as evidence below
   const displayContent = useMemo(
-    () => message.isStreaming ? message.content : stripChunkReferences(message.content),
-    [message.content, message.isStreaming]
+    () => stripChunkReferences(message.content),
+    [message.content]
   );
 
   if (isUser) {

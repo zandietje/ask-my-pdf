@@ -10,8 +10,7 @@ public class SqliteDb(string dbPath)
 
     public async Task InitializeAsync()
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -74,8 +73,7 @@ public class SqliteDb(string dbPath)
 
     public async Task SaveDocumentAsync(Document doc, byte[] fileBytes, List<PageBoundingData> bounds)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
         // Insert document metadata
@@ -126,8 +124,7 @@ public class SqliteDb(string dbPath)
 
     public async Task<bool> DeleteDocumentAsync(string id)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
         // Delete from child tables first, then parent
@@ -155,29 +152,19 @@ public class SqliteDb(string dbPath)
 
     public async Task<Document?> GetDocumentAsync(string id)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT id, file_name, uploaded_at, page_count, file_size FROM documents WHERE id = @id";
         cmd.Parameters.AddWithValue("@id", id);
 
         await using var reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync())
-            return null;
-
-        return new Document(
-            reader.GetString(0),
-            reader.GetString(1),
-            DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
-            reader.GetInt32(3),
-            reader.GetInt64(4));
+        return await reader.ReadAsync() ? ReadDocument(reader) : null;
     }
 
     public async Task<List<Document>> GetAllDocumentsAsync()
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT id, file_name, uploaded_at, page_count, file_size FROM documents ORDER BY uploaded_at DESC";
@@ -185,22 +172,14 @@ public class SqliteDb(string dbPath)
         var docs = new List<Document>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-        {
-            docs.Add(new Document(
-                reader.GetString(0),
-                reader.GetString(1),
-                DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
-                reader.GetInt32(3),
-                reader.GetInt64(4)));
-        }
+            docs.Add(ReadDocument(reader));
 
         return docs;
     }
 
     public async Task<byte[]?> GetFileAsync(string documentId)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT file_bytes FROM stored_files WHERE document_id = @docId";
@@ -214,8 +193,7 @@ public class SqliteDb(string dbPath)
     {
         if (pageNumbers.Count == 0) return [];
 
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         var paramNames = pageNumbers.Select((_, i) => $"@p{i}").ToList();
         await using var cmd = conn.CreateCommand();
@@ -227,22 +205,14 @@ public class SqliteDb(string dbPath)
         var pages = new List<PageBoundingData>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-        {
-            var words = JsonSerializer.Deserialize<List<WordBoundingBox>>(reader.GetString(3)) ?? [];
-            pages.Add(new PageBoundingData(
-                reader.GetInt32(0),
-                reader.GetDouble(1),
-                reader.GetDouble(2),
-                words));
-        }
+            pages.Add(ReadPageBounds(reader));
 
         return pages;
     }
 
     public async Task<List<PageBoundingData>> GetPageBoundsAsync(string documentId)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT page_number, page_width, page_height, words_json FROM page_bounds WHERE document_id = @docId ORDER BY page_number";
@@ -251,22 +221,14 @@ public class SqliteDb(string dbPath)
         var pages = new List<PageBoundingData>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-        {
-            var words = JsonSerializer.Deserialize<List<WordBoundingBox>>(reader.GetString(3)) ?? [];
-            pages.Add(new PageBoundingData(
-                reader.GetInt32(0),
-                reader.GetDouble(1),
-                reader.GetDouble(2),
-                words));
-        }
+            pages.Add(ReadPageBounds(reader));
 
         return pages;
     }
 
     public async Task SaveChunksAsync(string documentId, List<DocumentChunk> chunks)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
         foreach (var chunk in chunks)
@@ -289,8 +251,7 @@ public class SqliteDb(string dbPath)
 
     public async Task<List<DocumentChunk>> SearchChunksAsync(string documentId, string query, int topK = 10)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         var sanitized = SanitizeFtsQuery(query);
 
@@ -311,21 +272,14 @@ public class SqliteDb(string dbPath)
         var results = new List<DocumentChunk>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-        {
-            results.Add(new DocumentChunk(
-                reader.GetString(0),
-                reader.GetInt32(1),
-                reader.GetInt32(2),
-                reader.GetString(3)));
-        }
+            results.Add(ReadChunk(reader));
 
         return results;
     }
 
     public async Task<List<DocumentChunk>> GetAllChunksAsync(string documentId)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -339,21 +293,14 @@ public class SqliteDb(string dbPath)
         var results = new List<DocumentChunk>();
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-        {
-            results.Add(new DocumentChunk(
-                reader.GetString(0),
-                reader.GetInt32(1),
-                reader.GetInt32(2),
-                reader.GetString(3)));
-        }
+            results.Add(ReadChunk(reader));
 
         return results;
     }
 
     public async Task SaveEmbeddingsAsync(string documentId, List<(int ChunkIndex, float[] Embedding)> embeddings)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
         await using var tx = await conn.BeginTransactionAsync();
 
         foreach (var (chunkIndex, embedding) in embeddings)
@@ -381,8 +328,7 @@ public class SqliteDb(string dbPath)
     public async Task<List<(int ChunkIndex, double Score)>> VectorSearchAsync(
         string documentId, float[] queryEmbedding, int topK = 10)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT chunk_index, embedding FROM chunk_embeddings WHERE document_id = @docId";
@@ -408,8 +354,7 @@ public class SqliteDb(string dbPath)
     /// <summary>Returns true if any embeddings exist for this document.</summary>
     public async Task<bool> HasEmbeddingsAsync(string documentId)
     {
-        await using var conn = new SqliteConnection(_connectionString);
-        await conn.OpenAsync();
+        await using var conn = await OpenConnectionAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM chunk_embeddings WHERE document_id = @docId";
@@ -455,6 +400,36 @@ public class SqliteDb(string dbPath)
         var floats = new float[bytes.Length / sizeof(float)];
         Buffer.BlockCopy(bytes, 0, floats, 0, bytes.Length);
         return floats;
+    }
+
+    private static Document ReadDocument(SqliteDataReader reader) =>
+        new(reader.GetString(0),
+            reader.GetString(1),
+            DateTime.Parse(reader.GetString(2), null, System.Globalization.DateTimeStyles.RoundtripKind),
+            reader.GetInt32(3),
+            reader.GetInt64(4));
+
+    private static PageBoundingData ReadPageBounds(SqliteDataReader reader)
+    {
+        var words = JsonSerializer.Deserialize<List<WordBoundingBox>>(reader.GetString(3)) ?? [];
+        return new PageBoundingData(
+            reader.GetInt32(0),
+            reader.GetDouble(1),
+            reader.GetDouble(2),
+            words);
+    }
+
+    private static DocumentChunk ReadChunk(SqliteDataReader reader) =>
+        new(reader.GetString(0),
+            reader.GetInt32(1),
+            reader.GetInt32(2),
+            reader.GetString(3));
+
+    private async Task<SqliteConnection> OpenConnectionAsync()
+    {
+        var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        return conn;
     }
 
     private static double CosineSimilarity(float[] a, float[] b)

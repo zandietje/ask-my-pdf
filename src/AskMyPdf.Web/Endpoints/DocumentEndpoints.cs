@@ -9,6 +9,9 @@ public static class DocumentEndpoints
     // PDF magic bytes: "%PDF"
     private static readonly byte[] PdfMagicBytes = [0x25, 0x50, 0x44, 0x46];
 
+    private static DocumentDto ToDto(Core.Models.Document d) =>
+        new(d.Id, d.FileName, d.UploadedAt, d.PageCount, d.FileSize);
+
     public static void MapDocumentEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/documents");
@@ -25,7 +28,8 @@ public static class DocumentEndpoints
 
             // Read into memory for magic bytes check + processing
             using var ms = new MemoryStream();
-            await file.OpenReadStream().CopyToAsync(ms);
+            await using var fileStream = file.OpenReadStream();
+            await fileStream.CopyToAsync(ms);
             var bytes = ms.ToArray();
 
             // Validate PDF magic bytes
@@ -52,8 +56,7 @@ public static class DocumentEndpoints
         group.MapGet("/", async (SqliteDb db) =>
         {
             var docs = await db.GetAllDocumentsAsync();
-            return Results.Ok(docs.Select(d =>
-                new DocumentDto(d.Id, d.FileName, d.UploadedAt, d.PageCount, d.FileSize)));
+            return Results.Ok(docs.Select(ToDto));
         });
 
         group.MapGet("/{id}", async (string id, SqliteDb db) =>
@@ -61,7 +64,7 @@ public static class DocumentEndpoints
             var doc = await db.GetDocumentAsync(id);
             return doc is null
                 ? Results.NotFound()
-                : Results.Ok(new DocumentDto(doc.Id, doc.FileName, doc.UploadedAt, doc.PageCount, doc.FileSize));
+                : Results.Ok(ToDto(doc));
         });
 
         group.MapGet("/{id}/file", async (string id, SqliteDb db) =>
