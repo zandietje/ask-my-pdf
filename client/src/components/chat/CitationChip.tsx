@@ -18,10 +18,10 @@ export function CitationChip({ citation, onClick }: CitationChipProps) {
   return (
     <button
       onClick={() => onClick(citation)}
-      className="flex items-start gap-2.5 text-left group w-full rounded-lg bg-amber-50/70 border border-amber-200/60 hover:border-amber-300 hover:bg-amber-50 p-3 md:p-2.5 transition-colors"
+      className="flex items-start gap-2.5 text-left group w-full rounded-lg bg-citation-bg border border-citation-border hover:border-citation hover:bg-citation-bg p-3 md:p-2.5 transition-colors"
       title={tooltip}
     >
-      <span className="inline-flex items-center gap-1 shrink-0 rounded-md bg-amber-100 text-amber-800 px-2.5 py-1 md:px-2 md:py-0.5 text-sm md:text-xs font-semibold">
+      <span className="inline-flex items-center gap-1 shrink-0 rounded-md bg-citation/10 text-citation-text px-2.5 py-1 md:px-2 md:py-0.5 text-sm md:text-xs font-semibold">
         <BookOpen className="h-3.5 w-3.5 md:h-3 md:w-3" />
         p. {citation.pageNumber}
       </span>
@@ -30,7 +30,7 @@ export function CitationChip({ citation, onClick }: CitationChipProps) {
           "{preview}"
         </span>
       </span>
-      <ArrowRight className="h-4 w-4 md:h-3.5 md:w-3.5 shrink-0 mt-0.5 text-amber-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
+      <ArrowRight className="h-4 w-4 md:h-3.5 md:w-3.5 shrink-0 mt-0.5 text-citation opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
     </button>
   );
 }

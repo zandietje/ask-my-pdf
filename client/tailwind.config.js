@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -32,10 +33,25 @@ export default {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        surface: {
+          DEFAULT: "hsl(var(--surface))",
+          hover: "hsl(var(--surface-hover))",
+        },
+        citation: {
+          DEFAULT: "hsl(var(--citation))",
+          bg: "hsl(var(--citation-bg))",
+          border: "hsl(var(--citation-border))",
+          text: "hsl(var(--citation-text))",
+        },
+        success: "hsl(var(--success))",
       },
       borderRadius: {
         lg: "var(--radius)",

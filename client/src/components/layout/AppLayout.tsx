@@ -1,30 +1,49 @@
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
-import { MobileHeader } from "./MobileHeader";
+import { TopBar } from "./TopBar";
+import { Sidebar, SidebarExpandButton } from "./Sidebar";
+import { ContentArea } from "./ContentArea";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import type { EngineInfo } from "@/lib/types";
 
 interface AppLayoutProps {
-  leftPanel: React.ReactNode;
-  rightPanel: React.ReactNode;
-  // Mobile-only props
+  chatPanel: React.ReactNode;
+  pdfPanel: React.ReactNode;
+  sidebarContent: React.ReactNode;
+  // Engine selector
+  engines: EngineInfo[];
+  selectedEngine: string;
+  onEngineChange: (key: string) => void;
+  // Theme
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
+  // Sidebar
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
+  // Mobile
   mobileTab: MobileTab;
   onMobileTabChange: (tab: MobileTab) => void;
   sidebarOpen: boolean;
   onSidebarOpenChange: (open: boolean) => void;
-  sidebarContent: React.ReactNode;
   documentName: string | null;
   hasDocument: boolean;
 }
 
 export function AppLayout({
-  leftPanel,
-  rightPanel,
+  chatPanel,
+  pdfPanel,
+  sidebarContent,
+  engines,
+  selectedEngine,
+  onEngineChange,
+  theme,
+  onToggleTheme,
+  sidebarCollapsed,
+  onToggleSidebar,
   mobileTab,
   onMobileTabChange,
   sidebarOpen,
   onSidebarOpenChange,
-  sidebarContent,
   documentName,
   hasDocument,
 }: AppLayoutProps) {
@@ -32,31 +51,55 @@ export function AppLayout({
 
   if (!isMobile) {
     return (
-      <PanelGroup direction="horizontal" className="h-screen">
-        <Panel defaultSize={40} minSize={25}>
-          {leftPanel}
-        </Panel>
-        <PanelResizeHandle className="w-1 bg-border hover:bg-primary/30 active:bg-primary/40 transition-colors" />
-        <Panel defaultSize={60} minSize={30}>
-          {rightPanel}
-        </Panel>
-      </PanelGroup>
+      <div className="flex flex-col h-screen">
+        <TopBar
+          engines={engines}
+          selectedEngine={selectedEngine}
+          onEngineChange={onEngineChange}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+        />
+        <div className="flex flex-1 min-h-0">
+          <Sidebar
+            isCollapsed={sidebarCollapsed}
+            onToggleCollapse={onToggleSidebar}
+          >
+            {sidebarContent}
+          </Sidebar>
+          <div className="flex-1 min-w-0 relative">
+            {sidebarCollapsed && (
+              <SidebarExpandButton onClick={onToggleSidebar} />
+            )}
+            <ContentArea
+              chatPanel={chatPanel}
+              pdfPanel={pdfPanel}
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 
+  // Mobile layout
   return (
     <div className="flex flex-col h-[100dvh]">
-      <MobileHeader
-        documentName={documentName}
+      <TopBar
+        engines={engines}
+        selectedEngine={selectedEngine}
+        onEngineChange={onEngineChange}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
+        isMobile
         onOpenSidebar={() => onSidebarOpenChange(true)}
+        documentName={documentName}
       />
 
       <div className="flex-1 min-h-0 overflow-hidden relative">
         <div className={mobileTab === "chat" ? "h-full" : "h-full absolute inset-0 invisible"}>
-          {leftPanel}
+          {chatPanel}
         </div>
         <div className={mobileTab === "pdf" ? "h-full" : "h-full absolute inset-0 invisible"}>
-          {rightPanel}
+          {pdfPanel}
         </div>
       </div>
 

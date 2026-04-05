@@ -11,7 +11,7 @@ interface MobileTabBarProps {
 
 export function MobileTabBar({ activeTab, onTabChange, hasDocument }: MobileTabBarProps) {
   return (
-    <div className="flex border-t bg-white shrink-0 safe-area-bottom">
+    <div className="flex border-t bg-card shrink-0 safe-area-bottom">
       <button
         onClick={() => onTabChange("chat")}
         className={cn(

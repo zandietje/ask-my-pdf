@@ -1,6 +1,12 @@
 import type { EngineInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Zap, BookOpen, Microscope } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface EngineSelectorProps {
   engines: EngineInfo[];
@@ -12,12 +18,12 @@ const engineMeta: Record<string, { icon: typeof Zap; label: string; description:
   rag: {
     icon: Zap,
     label: "Quick",
-    description: "Searches relevant passages",
+    description: "Searches relevant passages via RAG",
   },
   anthropic: {
     icon: BookOpen,
     label: "Full",
-    description: "Reads entire document",
+    description: "Reads entire document with Claude",
   },
   "claude-cli": {
     icon: Microscope,
@@ -30,11 +36,8 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
   if (engines.length <= 1) return null;
 
   return (
-    <div className="space-y-1.5 md:space-y-1">
-      <label className="text-xs md:text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-        Analysis Mode
-      </label>
-      <div className="flex rounded-lg bg-slate-100 p-0.5 gap-0.5">
+    <TooltipProvider delayDuration={300}>
+      <div className="flex rounded-lg bg-secondary p-0.5 gap-0.5">
         {engines.map((engine) => {
           const meta = engineMeta[engine.key] ?? {
             icon: Zap,
@@ -45,31 +48,31 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
           const isSelected = engine.key === selected;
 
           return (
-            <button
-              key={engine.key}
-              type="button"
-              onClick={() => onChange(engine.key)}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-2.5 md:px-2.5 md:py-1.5 text-sm md:text-xs font-medium transition-all duration-150",
-                isSelected
-                  ? "bg-white text-primary shadow-sm ring-1 ring-border/50"
-                  : "text-muted-foreground hover:text-foreground hover:bg-slate-50"
-              )}
-            >
-              <Icon className="h-3.5 w-3.5 md:h-3 md:w-3 shrink-0" />
-              <span>{meta.label}</span>
+            <Tooltip key={engine.key}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onChange(engine.key)}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150",
+                    isSelected
+                      ? "bg-card text-primary shadow-sm ring-1 ring-border/50"
+                      : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+                  )}
+                >
+                  <Icon className="h-3 w-3 shrink-0" />
+                  <span>{meta.label}</span>
+                </button>
+              </TooltipTrigger>
               {meta.description && (
-                <span className={cn(
-                  "text-[11px] md:text-[10px] font-normal hidden sm:inline",
-                  isSelected ? "text-muted-foreground" : "text-muted-foreground/60"
-                )}>
-                  · {meta.description}
-                </span>
+                <TooltipContent>
+                  <p>{meta.description}</p>
+                </TooltipContent>
               )}
-            </button>
+            </Tooltip>
           );
         })}
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef } from "react";
-import { Upload, Loader2, CheckCircle2 } from "lucide-react";
+import { Upload, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 interface UploadDropzoneProps {
@@ -9,28 +10,23 @@ interface UploadDropzoneProps {
 export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setError("Only PDF files are accepted");
+      toast.error("Only PDF files are accepted");
       return;
     }
     if (file.size > 32 * 1024 * 1024) {
-      setError("File exceeds the 32 MB size limit");
+      toast.error("File exceeds the 32 MB size limit");
       return;
     }
-    setError(null);
-    setSuccess(null);
     setIsUploading(true);
     try {
       await onUpload(file);
-      setSuccess(`"${file.name}" uploaded`);
-      setTimeout(() => setSuccess(null), 3000);
+      toast.success(`"${file.name}" uploaded`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+      toast.error(e instanceof Error ? e.message : "Upload failed. Please try again.");
     } finally {
       setIsUploading(false);
     }
@@ -64,57 +60,44 @@ export function UploadDropzone({ onUpload }: UploadDropzoneProps) {
   }, [handleFile]);
 
   return (
-    <div>
-      <div
-        onClick={handleClick}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={cn(
-          "flex items-center gap-3 rounded-xl border-2 border-dashed p-4 md:p-3.5 cursor-pointer transition-all",
-          isDragging
-            ? "border-primary bg-primary/5 scale-[1.01]"
-            : "border-border hover:border-primary/40 hover:bg-accent/30",
-          isUploading && "pointer-events-none opacity-60"
+    <div
+      onClick={handleClick}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        "flex items-center gap-3 rounded-xl border-2 border-dashed p-4 md:p-3.5 cursor-pointer transition-all",
+        isDragging
+          ? "border-primary bg-primary/5 scale-[1.01]"
+          : "border-border hover:border-primary/40 hover:bg-accent/30",
+        isUploading && "pointer-events-none opacity-60"
+      )}
+    >
+      <div className={cn(
+        "flex items-center justify-center h-10 w-10 md:h-9 md:w-9 rounded-lg shrink-0 transition-colors",
+        isDragging ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+      )}>
+        {isUploading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        ) : (
+          <Upload className="h-5 w-5" />
         )}
-      >
-        <div className={cn(
-          "flex items-center justify-center h-10 w-10 md:h-9 md:w-9 rounded-lg shrink-0 transition-colors",
-          isDragging ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-        )}>
-          {isUploading ? (
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          ) : (
-            <Upload className="h-5 w-5" />
-          )}
-        </div>
-        <div className="min-w-0">
-          <p className="text-base md:text-sm font-medium text-foreground/80">
-            {isUploading ? "Processing..." : "Upload PDF"}
-          </p>
-          <p className="text-xs md:text-[11px] text-muted-foreground">
-            {isUploading ? "Extracting text and bounding boxes" : "Drag & drop or click to browse"}
-          </p>
-        </div>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf"
-          onChange={handleInputChange}
-          className="hidden"
-        />
       </div>
-      {error && (
-        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-destructive/5 border border-destructive/20 px-3 py-2">
-          <p className="text-sm md:text-xs text-destructive">{error}</p>
-        </div>
-      )}
-      {success && (
-        <p className="mt-2 text-sm md:text-xs text-emerald-600 flex items-center gap-1.5">
-          <CheckCircle2 className="h-4 w-4 md:h-3.5 md:w-3.5 shrink-0" />
-          {success}
+      <div className="min-w-0">
+        <p className="text-base md:text-sm font-medium text-foreground">
+          {isUploading ? "Processing..." : "Upload PDF"}
         </p>
-      )}
+        <p className="text-xs md:text-[11px] text-muted-foreground">
+          {isUploading ? "Extracting text and bounding boxes" : "Drag & drop or click to browse"}
+        </p>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf"
+        onChange={handleInputChange}
+        className="hidden"
+      />
     </div>
   );
 }

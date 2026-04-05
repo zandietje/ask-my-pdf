@@ -49,7 +49,7 @@ export function ChatPanel({ messages, isLoading, hasDocument, documentName, onSe
               <MessageSquareText className="h-7 w-7 md:h-6 md:w-6" />
             </div>
             <div className="text-center space-y-1">
-              <p className="text-base md:text-sm font-medium text-foreground/70">
+              <p className="text-base md:text-sm font-medium text-foreground">
                 {hasDocument ? "Ready to answer" : "No document selected"}
               </p>
               <p className="text-sm md:text-xs">
@@ -65,7 +65,7 @@ export function ChatPanel({ messages, isLoading, hasDocument, documentName, onSe
                     key={q}
                     type="button"
                     onClick={() => handleSuggestion(q)}
-                    className="flex items-center gap-2 text-left text-sm md:text-xs text-muted-foreground hover:text-foreground rounded-lg border border-border/60 hover:border-border hover:bg-accent/40 px-4 py-3 md:px-3 md:py-2 transition-colors group"
+                    className="flex items-center gap-2 text-left text-sm md:text-xs text-muted-foreground hover:text-foreground rounded-lg border border-border hover:border-primary/30 hover:bg-accent/40 px-4 py-3 md:px-3 md:py-2 transition-colors group"
                   >
                     <span className="flex-1">{q}</span>
                     <ArrowRight className="h-4 w-4 md:h-3 md:w-3 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
@@ -85,11 +85,11 @@ export function ChatPanel({ messages, isLoading, hasDocument, documentName, onSe
         <div ref={scrollRef} />
       </div>
 
-      <div className="border-t bg-white shadow-[0_-1px_3px_rgba(0,0,0,0.04)] safe-area-bottom">
+      <div className="border-t bg-card shadow-[0_-1px_3px_rgba(0,0,0,0.04)] safe-area-bottom">
         {hasDocument && documentName && (
           <div className="px-4 pt-2.5 flex items-center gap-1.5 text-xs md:text-[11px] text-muted-foreground">
             <FileText className="h-3.5 w-3.5 md:h-3 md:w-3 shrink-0" />
-            <span className="truncate">Asking about <span className="font-medium text-foreground/70">{documentName}</span></span>
+            <span className="truncate">Asking about <span className="font-medium text-foreground">{documentName}</span></span>
           </div>
         )}
         <form onSubmit={handleSubmit} className="p-4 pt-2 md:p-3 md:pt-2 flex gap-2">
@@ -98,7 +98,7 @@ export function ChatPanel({ messages, isLoading, hasDocument, documentName, onSe
             onChange={e => setInput(e.target.value)}
             placeholder={hasDocument ? "Ask about this document..." : "Select a document first"}
             disabled={!hasDocument || isLoading}
-            className="h-12 md:h-10 text-base md:text-sm bg-slate-50 focus:bg-white transition-colors rounded-lg"
+            className="h-12 md:h-10 text-base md:text-sm bg-secondary focus:bg-card transition-colors rounded-lg"
           />
           <Button
             type="submit"

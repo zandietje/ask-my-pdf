@@ -63,7 +63,7 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
         </div>
       </div>
       <div className="max-w-[95%] md:max-w-[90%] min-w-0">
-        <div className="rounded-2xl rounded-tl-sm bg-white border border-border/60 shadow-sm px-4 py-3 md:px-3.5 md:py-2.5">
+        <div className="rounded-2xl rounded-tl-sm bg-card border border-border shadow-sm px-4 py-3 md:px-3.5 md:py-2.5">
           {message.isStreaming && !message.content ? (
             <div className="flex items-center gap-1.5 py-1">
               <div className="flex items-center gap-1">
