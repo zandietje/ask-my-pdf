@@ -29,5 +29,6 @@ public interface IAnswerEngine
     /// — the shared pipeline fills those in.
     /// </summary>
     IAsyncEnumerable<AnswerStreamEvent> StreamRawAnswerAsync(
-        string question, byte[] pdfBytes, string fileName, CancellationToken ct = default);
+        string question, byte[] pdfBytes, string fileName, string documentId,
+        CancellationToken ct = default);
 }

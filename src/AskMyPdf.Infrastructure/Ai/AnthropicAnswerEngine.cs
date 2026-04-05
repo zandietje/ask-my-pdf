@@ -15,7 +15,7 @@ public class AnthropicAnswerEngine(ClaudeService claude) : IAnswerEngine
     public bool NeedsFocusing => true;
 
     public async IAsyncEnumerable<AnswerStreamEvent> StreamRawAnswerAsync(
-        string question, byte[] pdfBytes, string fileName,
+        string question, byte[] pdfBytes, string fileName, string documentId,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         await foreach (var evt in claude.StreamAnswerAsync(question, pdfBytes, fileName, ct))

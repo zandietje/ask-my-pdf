@@ -25,7 +25,7 @@ public class ClaudeCliEngine(ClaudeCliRunner runner, ILogger<ClaudeCliEngine> lo
     };
 
     public async IAsyncEnumerable<AnswerStreamEvent> StreamRawAnswerAsync(
-        string question, byte[] pdfBytes, string fileName,
+        string question, byte[] pdfBytes, string fileName, string documentId,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         // Materialize PDF to a temp file so the CLI can read it

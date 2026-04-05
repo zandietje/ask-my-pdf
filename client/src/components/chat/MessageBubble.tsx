@@ -27,11 +27,22 @@ function deduplicateCitations(citations: Citation[]): Citation[] {
   return Array.from(byPage.values());
 }
 
+/** Strip inline [C<n>] chunk-ID references — citations are shown as evidence below. */
+function stripChunkReferences(content: string): string {
+  return content.replace(/\s*\[C\d+\]/g, "");
+}
+
 export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const mergedCitations = useMemo(
     () => deduplicateCitations(message.citations),
     [message.citations]
+  );
+
+  // Strip [C<n>] references after streaming completes — citations shown as evidence below
+  const displayContent = useMemo(
+    () => message.isStreaming ? message.content : stripChunkReferences(message.content),
+    [message.content, message.isStreaming]
   );
 
   if (isUser) {
@@ -64,7 +75,7 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
             </div>
           ) : (
             <p className="text-base md:text-sm whitespace-pre-wrap leading-relaxed">
-              {message.content}
+              {displayContent}
               {message.isStreaming && (
                 <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse align-text-bottom rounded-sm" />
               )}

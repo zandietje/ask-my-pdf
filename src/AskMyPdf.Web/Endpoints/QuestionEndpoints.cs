@@ -59,6 +59,7 @@ public static class QuestionEndpoints
                                     width = a.Width,
                                     height = a.Height,
                                 }),
+                                chunkIndex = cr.Citation.ChunkIndex,
                             }, JsonOptions)),
                         AnswerStreamEvent.Done => ("done", "{}"),
                         _ => ("unknown", "{}"),

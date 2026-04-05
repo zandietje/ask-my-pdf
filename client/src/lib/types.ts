@@ -27,6 +27,7 @@ export interface Citation {
   pageNumber: number;
   citedText: string;
   highlightAreas: HighlightArea[];
+  chunkIndex?: number | null;
 }
 
 export interface ChatMessage {

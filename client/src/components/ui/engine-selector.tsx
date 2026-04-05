@@ -1,6 +1,6 @@
 import type { EngineInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Zap, Search } from "lucide-react";
+import { Zap, Search, Library } from "lucide-react";
 
 interface EngineSelectorProps {
   engines: EngineInfo[];
@@ -18,6 +18,11 @@ const engineMeta: Record<string, { icon: typeof Zap; label: string; description:
     icon: Search,
     label: "Deep",
     description: "Thorough analysis",
+  },
+  rag: {
+    icon: Library,
+    label: "Smart",
+    description: "Retrieves & cites sources",
   },
 };
 

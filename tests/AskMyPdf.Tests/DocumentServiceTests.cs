@@ -1,9 +1,11 @@
+using AskMyPdf.Infrastructure.Ai;
 using AskMyPdf.Infrastructure.Data;
 using AskMyPdf.Infrastructure.Pdf;
 using AskMyPdf.Infrastructure.Services;
 using AskMyPdf.Tests.Fixtures;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace AskMyPdf.Tests;
@@ -20,7 +22,12 @@ public class DocumentServiceTests : IAsyncLifetime
     {
         _db = new SqliteDb(_dbPath);
         await _db.InitializeAsync();
-        _svc = new DocumentService(new BoundingBoxExtractor(), _db);
+        // EmbeddingService with no API key → embeddings disabled, FTS5-only
+        var embeddingOptions = new EmbeddingOptions();
+        var embeddingService = new EmbeddingService(new HttpClient(), embeddingOptions, NullLogger<EmbeddingService>.Instance);
+        _svc = new DocumentService(
+            new BoundingBoxExtractor(), new DocumentChunker(), embeddingService, _db,
+            NullLogger<DocumentService>.Instance);
     }
 
     public Task DisposeAsync()

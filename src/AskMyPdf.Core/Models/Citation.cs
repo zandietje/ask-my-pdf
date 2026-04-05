@@ -5,4 +5,5 @@ public record Citation(
     string DocumentName,
     int PageNumber,
     string CitedText,
-    List<HighlightArea> HighlightAreas);
+    List<HighlightArea> HighlightAreas,
+    int? ChunkIndex = null);

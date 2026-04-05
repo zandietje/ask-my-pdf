@@ -8,6 +8,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - Anthropic__ApiKey=${ANTHROPIC_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OpenAI__ApiKey=${OPENAI_API_KEY}
       - Anthropic__AnswerModel=${ANSWER_MODEL:-claude-sonnet-4-20250514}
       - Anthropic__FocusModel=${FOCUS_MODEL:-claude-haiku-4-5-20251001}
       - Database__Path=/data/askmypdf.db

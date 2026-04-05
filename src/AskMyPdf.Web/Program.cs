@@ -40,6 +40,25 @@ if (cliEnabled)
     builder.Services.AddSingleton<IAnswerEngine, ClaudeCliEngine>();
 }
 
+// Embeddings — OpenAI (optional, enables hybrid vector+FTS5 retrieval)
+builder.Services.AddHttpClient<EmbeddingService>();
+builder.Services.AddSingleton(new EmbeddingOptions(
+    ApiKey: builder.Configuration["OpenAI:ApiKey"],
+    Model: builder.Configuration["OpenAI:EmbeddingModel"] ?? "text-embedding-3-small",
+    Dimensions: builder.Configuration.GetValue("OpenAI:Dimensions", 1536)));
+builder.Services.AddSingleton<EmbeddingService>();
+
+// AI — RAG engine (Engine C) — hybrid FTS5 + vector retrieval
+var ragEnabled = builder.Configuration.GetValue<bool>("Rag:Enabled");
+if (ragEnabled)
+{
+    builder.Services.AddSingleton(new RagEngineOptions(
+        Model: builder.Configuration["Rag:Model"] ?? "claude-sonnet-4-20250514",
+        TopK: builder.Configuration.GetValue("Rag:TopK", 8)));
+    builder.Services.AddSingleton<IAnswerEngine, RagAnswerEngine>();
+}
+
+builder.Services.AddSingleton<DocumentChunker>();
 builder.Services.AddScoped<QuestionService>();
 
 var app = builder.Build();

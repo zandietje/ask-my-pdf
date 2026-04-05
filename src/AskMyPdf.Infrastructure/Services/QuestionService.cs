@@ -51,7 +51,7 @@ public class QuestionService(
         var fullAnswer = new StringBuilder();
         var pendingCitations = new List<Citation>();
 
-        await foreach (var evt in engine.StreamRawAnswerAsync(question, pdfBytes, doc.FileName, ct))
+        await foreach (var evt in engine.StreamRawAnswerAsync(question, pdfBytes, doc.FileName, documentId, ct))
         {
             switch (evt)
             {
@@ -130,7 +130,7 @@ public class QuestionService(
             }
             else
             {
-                // CLI path: already-exact snippets → contiguous matching only
+                // CLI/RAG path: already-exact snippets → contiguous matching only
                 // (no per-word fallback, which would scatter highlights across the page)
                 foreach (var rawCitation in pendingCitations.OrderBy(c => c.PageNumber))
                 {
@@ -147,7 +147,8 @@ public class QuestionService(
                             DocumentName: doc.FileName,
                             PageNumber: rawCitation.PageNumber,
                             CitedText: rawCitation.CitedText,
-                            HighlightAreas: highlightAreas));
+                            HighlightAreas: highlightAreas,
+                            ChunkIndex: rawCitation.ChunkIndex));
                 }
             }
         }
