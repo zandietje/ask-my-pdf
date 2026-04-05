@@ -11,7 +11,7 @@ import { useIsMobile } from "@/hooks/useMediaQuery";
 import { useTheme } from "@/hooks/useTheme";
 import { getEngines } from "@/lib/api";
 import type { Citation, EngineInfo } from "@/lib/types";
-import { FileSearch } from "lucide-react";
+import { PdfEmptyState } from "@/components/pdf/PdfEmptyState";
 import type { MobileTab } from "@/components/layout/MobileTabBar";
 
 export function App() {
@@ -120,15 +120,7 @@ export function App() {
       activeCitation={activeCitation}
     />
   ) : (
-    <div className="flex h-full flex-col items-center justify-center bg-secondary text-muted-foreground gap-4">
-      <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-muted">
-        <FileSearch className="h-8 w-8 text-muted-foreground/40" />
-      </div>
-      <div className="text-center space-y-1">
-        <p className="text-sm font-medium text-foreground">No document selected</p>
-        <p className="text-xs text-muted-foreground">Upload a PDF and select it to view here</p>
-      </div>
-    </div>
+    <PdfEmptyState />
   );
 
   return (

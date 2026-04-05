@@ -1,5 +1,11 @@
 import type { Citation } from "@/lib/types";
-import { BookOpen, ArrowRight } from "lucide-react";
+import { FileText } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface CitationChipProps {
   citation: Citation;
@@ -7,30 +13,39 @@ interface CitationChipProps {
 }
 
 export function CitationChip({ citation, onClick }: CitationChipProps) {
-  const preview = citation.citedText.length > 120
-    ? citation.citedText.slice(0, 120) + "..."
-    : citation.citedText;
-
-  const tooltip = citation.citedText.length > 200
-    ? citation.citedText.slice(0, 200) + "..."
-    : citation.citedText;
+  const shortText =
+    citation.citedText.length > 80
+      ? citation.citedText.slice(0, 80) + "..."
+      : citation.citedText;
 
   return (
-    <button
-      onClick={() => onClick(citation)}
-      className="flex items-start gap-2.5 text-left group w-full rounded-lg bg-citation-bg border border-citation-border hover:border-citation hover:bg-citation-bg p-3 md:p-2.5 transition-colors"
-      title={tooltip}
-    >
-      <span className="inline-flex items-center gap-1 shrink-0 rounded-md bg-citation/10 text-citation-text px-2.5 py-1 md:px-2 md:py-0.5 text-sm md:text-xs font-semibold">
-        <BookOpen className="h-3.5 w-3.5 md:h-3 md:w-3" />
-        p. {citation.pageNumber}
-      </span>
-      <span className="flex-1 min-w-0">
-        <span className="text-sm md:text-[13px] text-foreground/80 leading-relaxed line-clamp-2 italic">
-          "{preview}"
-        </span>
-      </span>
-      <ArrowRight className="h-4 w-4 md:h-3.5 md:w-3.5 shrink-0 mt-0.5 text-citation opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
-    </button>
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={() => onClick(citation)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-citation-bg border border-citation-border
+                       hover:border-citation text-citation-text px-2.5 py-1.5 text-xs transition-colors
+                       focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
+            <FileText className="h-3 w-3 shrink-0" />
+            <span className="font-semibold">p. {citation.pageNumber}</span>
+            <span className="text-citation-text/70 truncate max-w-[200px] hidden sm:inline">
+              {shortText}
+            </span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">
+          <p className="text-xs italic leading-relaxed">
+            "{citation.citedText.length > 300
+              ? citation.citedText.slice(0, 300) + "..."
+              : citation.citedText}"
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Click to view in document
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

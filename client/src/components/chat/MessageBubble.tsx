@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import type { ChatMessage, Citation } from "@/lib/types";
 import { CitationChip } from "./CitationChip";
+import { MessageContent } from "./MessageContent";
+import { StreamingIndicator } from "./StreamingIndicator";
 import { Bot } from "lucide-react";
 
 interface MessageBubbleProps {
@@ -39,7 +41,6 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
     [message.citations]
   );
 
-  // Strip [C<n>] references in real-time — citations shown as evidence below
   const displayContent = useMemo(
     () => stripChunkReferences(message.content),
     [message.content]
@@ -58,43 +59,33 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
   return (
     <div className="flex gap-2.5 justify-start">
       <div className="flex items-start pt-0.5 shrink-0">
-        <div className="flex items-center justify-center h-8 w-8 md:h-7 md:w-7 rounded-full bg-primary/10 text-primary">
-          <Bot className="h-4.5 w-4.5 md:h-4 md:w-4" />
+        <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+          <Bot className="h-4 w-4" />
         </div>
       </div>
-      <div className="max-w-[95%] md:max-w-[90%] min-w-0">
-        <div className="rounded-2xl rounded-tl-sm bg-card border border-border shadow-sm px-4 py-3 md:px-3.5 md:py-2.5">
+      <div className="max-w-[95%] min-w-0 space-y-2">
+        <div className="rounded-2xl rounded-tl-sm bg-card border border-border shadow-sm px-4 py-3">
           {message.isStreaming && !message.content ? (
-            <div className="flex items-center gap-1.5 py-1">
-              <div className="flex items-center gap-1">
-                <span className="h-2 w-2 md:h-1.5 md:w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_infinite]" />
-                <span className="h-2 w-2 md:h-1.5 md:w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
-                <span className="h-2 w-2 md:h-1.5 md:w-1.5 rounded-full bg-primary/60 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
-              </div>
-              <span className="text-sm md:text-xs text-muted-foreground">Analyzing document...</span>
-            </div>
+            <StreamingIndicator />
           ) : (
-            <p className="text-base md:text-sm whitespace-pre-wrap leading-relaxed">
-              {displayContent}
-              {message.isStreaming && (
-                <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary animate-pulse align-text-bottom rounded-sm" />
-              )}
-            </p>
+            <MessageContent content={displayContent} isStreaming={message.isStreaming} />
           )}
         </div>
 
         {mergedCitations.length > 0 && (
-          <div className="mt-2.5 md:mt-2 space-y-2 md:space-y-1.5">
-            <span className="text-xs md:text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Evidence
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Sources
             </span>
-            {mergedCitations.map((citation, i) => (
-              <CitationChip
-                key={`${citation.pageNumber}-${i}`}
-                citation={citation}
-                onClick={onCitationClick}
-              />
-            ))}
+            <div className="flex flex-wrap gap-1.5">
+              {mergedCitations.map((citation, i) => (
+                <CitationChip
+                  key={`${citation.pageNumber}-${i}`}
+                  citation={citation}
+                  onClick={onCitationClick}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
