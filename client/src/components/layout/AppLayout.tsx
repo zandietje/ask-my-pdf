@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/useMediaQuery";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { TopBar } from "./TopBar";
@@ -51,7 +52,7 @@ export function AppLayout({
 
   if (!isMobile) {
     return (
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-screen max-w-[2000px] mx-auto w-full">
         <TopBar
           engines={engines}
           selectedEngine={selectedEngine}
@@ -95,12 +96,20 @@ export function AppLayout({
       />
 
       <div className="flex-1 min-h-0 overflow-hidden relative">
-        <div className={mobileTab === "chat" ? "h-full" : "h-full absolute inset-0 invisible"}>
+        <motion.div
+          animate={{ opacity: mobileTab === "chat" ? 1 : 0 }}
+          transition={{ duration: 0.15 }}
+          className={mobileTab === "chat" ? "h-full" : "h-full absolute inset-0 pointer-events-none"}
+        >
           {chatPanel}
-        </div>
-        <div className={mobileTab === "pdf" ? "h-full" : "h-full absolute inset-0 invisible"}>
+        </motion.div>
+        <motion.div
+          animate={{ opacity: mobileTab === "pdf" ? 1 : 0 }}
+          transition={{ duration: 0.15 }}
+          className={mobileTab === "pdf" ? "h-full" : "h-full absolute inset-0 pointer-events-none"}
+        >
           {pdfPanel}
-        </div>
+        </motion.div>
       </div>
 
       <MobileTabBar

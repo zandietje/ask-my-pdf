@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { MessageSquareText, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +12,16 @@ interface MobileTabBarProps {
 
 export function MobileTabBar({ activeTab, onTabChange, hasDocument }: MobileTabBarProps) {
   return (
-    <div className="flex border-t bg-card shrink-0 safe-area-bottom">
+    <div className="flex border-t bg-card shrink-0 safe-area-bottom relative">
+      {/* Sliding top indicator */}
+      <motion.div
+        className="absolute top-0 h-0.5 bg-primary"
+        animate={{
+          left: activeTab === "chat" ? "0%" : "50%",
+          width: "50%",
+        }}
+        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+      />
       <button
         onClick={() => onTabChange("chat")}
         className={cn(

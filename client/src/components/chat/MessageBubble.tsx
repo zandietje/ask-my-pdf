@@ -1,9 +1,10 @@
 import { useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { ChatMessage, Citation } from "@/lib/types";
 import { CitationChip } from "./CitationChip";
 import { MessageContent } from "./MessageContent";
 import { StreamingIndicator } from "./StreamingIndicator";
-import { Bot } from "lucide-react";
+import { Bot, AlertCircle } from "lucide-react";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -46,6 +47,11 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
     [message.content]
   );
 
+  const isError = !isUser && (
+    message.content.startsWith("Error:") ||
+    message.content === "An error occurred. Please try again."
+  );
+
   if (isUser) {
     return (
       <div className="flex justify-end">
@@ -67,6 +73,11 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
         <div className="rounded-2xl rounded-tl-sm bg-card border border-border shadow-sm px-4 py-3">
           {message.isStreaming && !message.content ? (
             <StreamingIndicator />
+          ) : isError ? (
+            <div className="flex items-center gap-2 text-destructive text-sm">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{message.content}</span>
+            </div>
           ) : (
             <MessageContent content={displayContent} isStreaming={message.isStreaming} />
           )}
@@ -77,15 +88,30 @@ export function MessageBubble({ message, onCitationClick }: MessageBubbleProps) 
             <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
               Sources
             </span>
-            <div className="flex flex-wrap gap-1.5">
-              {mergedCitations.map((citation, i) => (
-                <CitationChip
-                  key={`${citation.pageNumber}-${i}`}
-                  citation={citation}
-                  onClick={onCitationClick}
-                />
-              ))}
-            </div>
+            <motion.div
+              className="flex flex-wrap gap-1.5"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: {},
+                visible: { transition: { staggerChildren: 0.05 } },
+              }}
+            >
+              <AnimatePresence>
+                {mergedCitations.map((citation, i) => (
+                  <motion.div
+                    key={`${citation.pageNumber}-${i}`}
+                    variants={{
+                      hidden: { opacity: 0, x: -8 },
+                      visible: { opacity: 1, x: 0 },
+                    }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                  >
+                    <CitationChip citation={citation} onClick={onCitationClick} />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </motion.div>
           </div>
         )}
       </div>

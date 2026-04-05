@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { MessageSquareText, FileSearch, ArrowRight } from "lucide-react";
 
 const SUGGESTED_QUESTIONS = [
@@ -37,23 +38,39 @@ export function ChatEmptyState({ hasDocument, documentName, onSuggestion }: Chat
           Ask any question about <span className="font-medium text-foreground">{documentName ?? "the document"}</span>
         </p>
       </div>
-      <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
+      <motion.div
+        className="grid grid-cols-1 gap-2 w-full max-w-sm"
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: {},
+          visible: { transition: { staggerChildren: 0.08, delayChildren: 0.2 } },
+        }}
+      >
         {SUGGESTED_QUESTIONS.map((q) => (
-          <button
+          <motion.div
             key={q}
-            type="button"
-            onClick={() => onSuggestion(q)}
-            className="flex items-center gap-3 text-left rounded-xl border border-border
-                       bg-card hover:bg-accent/50 px-4 py-3 transition-colors group"
+            variants={{
+              hidden: { opacity: 0, y: 8 },
+              visible: { opacity: 1, y: 0 },
+            }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
           >
-            <MessageSquareText className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1">
-              {q}
-            </span>
-            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition-all" />
-          </button>
+            <button
+              type="button"
+              onClick={() => onSuggestion(q)}
+              className="flex items-center gap-3 text-left rounded-xl border border-border
+                         bg-card hover:bg-accent/50 px-4 py-3 transition-colors group w-full"
+            >
+              <MessageSquareText className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1">
+                {q}
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition-all" />
+            </button>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </div>
   );
 }

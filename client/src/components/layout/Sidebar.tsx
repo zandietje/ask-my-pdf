@@ -1,6 +1,6 @@
+import { motion } from "framer-motion";
 import { PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -10,11 +10,14 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, onToggleCollapse, children }: SidebarProps) {
   return (
-    <div
-      className={cn(
-        "border-r bg-card shrink-0 flex flex-col transition-all duration-300 overflow-hidden",
-        isCollapsed ? "w-0 border-r-0" : "w-72"
-      )}
+    <motion.aside
+      className="border-r bg-card shrink-0 flex flex-col overflow-hidden"
+      animate={{
+        width: isCollapsed ? 0 : 288,
+        opacity: isCollapsed ? 0 : 1,
+        borderRightWidth: isCollapsed ? 0 : 1,
+      }}
+      transition={{ duration: 0.25, ease: "easeInOut" }}
     >
       <div className="flex flex-col flex-1 min-h-0 min-w-[18rem]">
         {children}
@@ -32,7 +35,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse, children }: SidebarProp
           </Button>
         </div>
       </div>
-    </div>
+    </motion.aside>
   );
 }
 

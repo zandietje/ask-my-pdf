@@ -1,6 +1,8 @@
 import { useRef, useState, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { ChatMessage, Citation } from "@/lib/types";
 import { MessageBubble } from "./MessageBubble";
+import { AnimatedList, AnimatedListItem } from "@/components/ui/animated-list";
 import { ChevronDown } from "lucide-react";
 
 interface MessageListProps {
@@ -43,25 +45,34 @@ export function MessageList({ messages, onCitationClick }: MessageListProps) {
         onScroll={handleScroll}
         className="overflow-y-auto h-full p-4 md:p-4 space-y-4 md:space-y-3"
       >
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            onCitationClick={onCitationClick}
-          />
-        ))}
+        <AnimatedList>
+          {messages.map((msg) => (
+            <AnimatedListItem key={msg.id} id={msg.id}>
+              <MessageBubble
+                message={msg}
+                onCitationClick={onCitationClick}
+              />
+            </AnimatedListItem>
+          ))}
+        </AnimatedList>
         <div ref={endRef} />
       </div>
 
-      {showScrollButton && (
-        <button
-          onClick={scrollToBottom}
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-card border border-border shadow-md rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors z-10"
-        >
-          <ChevronDown className="h-3.5 w-3.5" />
-          <span>New messages</span>
-        </button>
-      )}
+      <AnimatePresence>
+        {showScrollButton && (
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.15 }}
+            onClick={scrollToBottom}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-card border border-border shadow-md rounded-full px-3 py-1.5 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors z-10"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+            <span>New messages</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

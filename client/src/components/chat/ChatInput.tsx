@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import { Send, FileText } from "lucide-react";
 
 interface ChatInputProps {
@@ -50,17 +50,18 @@ export function ChatInput({ value, onChange, onSend, disabled, placeholder, docu
               placeholder={placeholder}
               disabled={disabled}
               rows={1}
+              inputMode="text"
               className="flex-1 resize-none bg-transparent border-0 focus:ring-0 focus:outline-none text-sm placeholder:text-muted-foreground px-2 py-1.5 max-h-32 disabled:opacity-50"
             />
-            <Button
+            <motion.button
               type="button"
-              size="icon"
               onClick={onSend}
               disabled={!value.trim() || disabled}
-              className="shrink-0 rounded-lg h-9 w-9"
+              whileTap={{ scale: 0.92 }}
+              className="shrink-0 rounded-lg h-9 w-9 bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-50 disabled:pointer-events-none"
             >
               <Send className="h-4 w-4" />
-            </Button>
+            </motion.button>
           </div>
         </div>
         <p className="hidden md:block text-[11px] text-muted-foreground mt-1.5 px-1">

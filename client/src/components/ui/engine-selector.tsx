@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import type { EngineInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Zap, BookOpen, Microscope } from "lucide-react";
@@ -54,14 +55,23 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
                   type="button"
                   onClick={() => onChange(engine.key)}
                   className={cn(
-                    "flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150",
+                    "relative flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-150",
                     isSelected
-                      ? "bg-card text-primary shadow-sm ring-1 ring-border/50"
+                      ? "text-primary"
                       : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
                   )}
                 >
-                  <Icon className="h-3 w-3 shrink-0" />
-                  <span>{meta.label}</span>
+                  {isSelected && (
+                    <motion.div
+                      layoutId="engine-indicator"
+                      className="absolute inset-0 bg-card rounded-md shadow-sm ring-1 ring-border/50"
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center justify-center gap-1.5">
+                    <Icon className="h-3 w-3 shrink-0" />
+                    <span>{meta.label}</span>
+                  </span>
                 </button>
               </TooltipTrigger>
               {meta.description && (

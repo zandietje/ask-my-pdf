@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from "framer-motion";
 import type { DocumentDto } from "@/lib/types";
 import { FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,15 +34,25 @@ export function DocumentList({ documents, selectedId, onSelect, onDelete, isLoad
 
   return (
     <div className="space-y-0.5">
-      {documents.map(doc => (
-        <DocumentItem
-          key={doc.id}
-          doc={doc}
-          isSelected={doc.id === selectedId}
-          onSelect={onSelect}
-          onDelete={onDelete}
-        />
-      ))}
+      <AnimatePresence initial={false}>
+        {documents.map(doc => (
+          <motion.div
+            key={doc.id}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            layout
+          >
+            <DocumentItem
+              doc={doc}
+              isSelected={doc.id === selectedId}
+              onSelect={onSelect}
+              onDelete={onDelete}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   );
 }

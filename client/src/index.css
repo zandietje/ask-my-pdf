@@ -81,6 +81,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Prevent iOS keyboard from pushing layout */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: -webkit-fill-available;
+  }
+}
+
 @layer utilities {
   .safe-area-top {
     padding-top: env(safe-area-inset-top, 0px);
