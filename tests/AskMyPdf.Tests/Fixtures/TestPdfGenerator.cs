@@ -30,6 +30,29 @@ public static class TestPdfGenerator
     }
 
     /// <summary>
+    /// Creates a single-page PDF with two distinct text columns for DLA testing.
+    /// Left column: "Left column first line" / "Left column second line"
+    /// Right column: "Right column first line" / "Right column second line"
+    /// </summary>
+    public static byte[] CreateTwoColumnPdf()
+    {
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.Helvetica);
+
+        var page = builder.AddPage(PageSize.A4);
+
+        // Left column (X=72)
+        page.AddText("Left column first line", 12, new PdfPoint(72, 700), font);
+        page.AddText("Left column second line", 12, new PdfPoint(72, 680), font);
+
+        // Right column (X=350, well separated from left column)
+        page.AddText("Right column first line", 12, new PdfPoint(350, 700), font);
+        page.AddText("Right column second line", 12, new PdfPoint(350, 680), font);
+
+        return builder.Build();
+    }
+
+    /// <summary>
     /// Creates a PDF with the specified number of pages.
     /// Each page contains "Page N content" text.
     /// </summary>

@@ -1,39 +1,43 @@
 # AskMyPdf
 
-A document Q&A application that lets you upload PDFs, ask natural language questions, and get AI-generated answers with precise, clickable citations that highlight the exact source text in the document.
+A document Q&A application that lets you upload PDFs and ask natural language questions about their contents. Every answer is grounded in the document with clickable citations that jump to and highlight the exact source passage in the PDF viewer.
 
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)
 ![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react)
-![Claude API](https://img.shields.io/badge/Anthropic-Claude%20API-D4A574)
+![Claude API](https://img.shields.io/badge/Anthropic-Claude_API-D4A574)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript)
+![SQLite](https://img.shields.io/badge/SQLite-FTS5-003B57?logo=sqlite)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+**Live demo:** [askmypdf.duckdns.org](https://askmypdf.duckdns.org)
+
+---
 
 ## How It Works
 
 1. **Upload** a PDF document (up to 100 pages, 32 MB)
-2. **Choose** an analysis mode — RAG (Hybrid), Anthropic API, or Claude Code CLI
-3. **Ask** a question about its contents (in any language)
-4. **Read** a streamed answer with inline citation chips (e.g. `[Page 7]`)
-5. **Click** a citation to jump to the exact passage, highlighted word-by-word in the PDF viewer
+2. **Ask** a question about its contents — in any language
+3. **Read** a streamed answer with inline citation chips like `[Page 7]`
+4. **Click** a citation to jump to the exact passage, highlighted word-by-word in the PDF viewer
 
-### Three Answer Engines
+### Two Analysis Modes
 
-The app ships with a **pluggable engine architecture** — all three engines feed into the same citation + highlight pipeline:
+The app offers two answer engines that share a common citation and highlighting pipeline. Switch between them with the toggle in the top bar.
 
-| Engine | How it works | Streaming | Best for |
-|--------|-------------|-----------|----------|
-| **RAG (Hybrid)** | Hybrid FTS5 + vector search retrieves relevant chunks, Claude generates a grounded answer with inline `[C3]` chunk citations. No focus pass needed — small chunks (~150 chars) are precise by design. | Real-time | Fast answers, lower API cost |
-| **Anthropic API** | Sends the full PDF to Claude with the Citations API enabled. Real-time token streaming. Broad citations refined with a parallel Haiku focus pass for word-level precision. | Real-time | Highest answer quality, cross-section questions |
-| **Claude Code CLI** | Runs `claude` as a subprocess with a structured JSON prompt. Returns exact verbatim snippets. No focus pass needed. | Batch | Thorough multi-pass analysis |
+| Mode | How it works | Streaming | Best for |
+|------|-------------|-----------|----------|
+| **Quick** (RAG) | Hybrid FTS5 + vector search retrieves relevant chunks, Claude generates a grounded answer with inline chunk citations. Small chunks (~150 chars) are precise by design — no post-processing needed. | Real-time | Fast answers, lower API cost |
+| **Deep** (Claude CLI) | Runs Claude Code as a subprocess with a structured JSON prompt for multi-pass analysis. Returns exact verbatim snippets with page references. | Batch | Thorough analysis of complex documents |
 
-Users switch between engines via a dropdown in the chat panel.
+### What Makes This Different
 
-### Design Philosophy: Multiple Engines, One Pipeline
+- **Every claim is cited** — the LLM is prompted to reference specific chunks, and those references are deterministically mapped back to the document
+- **Word-level highlighting** — PdfPig extracts bounding boxes at the word level; clicking a citation draws precise yellow overlays on the exact text
+- **Hybrid retrieval** — FTS5 (lexical, BM25) and OpenAI embeddings (semantic, cosine similarity) are merged via Reciprocal Rank Fusion, catching both keyword and meaning-based matches
+- **Real-time streaming** — answers appear token-by-token via SSE as Claude generates them; citations arrive at the end and are instantly clickable
+- **No vector database** — everything runs on a single SQLite file: documents, file blobs, word bounding boxes, text chunks, FTS5 index, and vector embeddings
 
-Rather than committing to a single approach, the app offers three engines that share a common downstream pipeline (citation resolution + bounding box matching + PDF highlighting). This lets users pick the right tradeoff for their task:
-
-- **RAG (Hybrid)** is the fastest and cheapest — it only sends retrieved chunks to Claude, not the full PDF. Hybrid retrieval (FTS5 lexical search + OpenAI vector embeddings merged via reciprocal rank fusion) handles both keyword and semantic queries. Falls back to FTS5-only if no OpenAI key is configured.
-- **Anthropic API** produces the highest-quality answers because Claude sees the entire document context. The Citations API returns structured `page_location` references with exact `cited_text`, guaranteed to be real (extracted, not generated). A parallel Haiku focus pass narrows broad citations to precise supporting sentences.
-- **Claude Code CLI** gives the deepest analysis by running Claude Code as a subprocess with multi-turn reasoning. Returns structured evidence with verbatim snippets.
+---
 
 ## Architecture
 
@@ -41,11 +45,10 @@ Rather than committing to a single approach, the app offers three engines that s
 ┌──────────────────────────────────────────────────────────┐
 │            React 18  ·  Vite  ·  TypeScript              │
 │   ┌──────────────────┐     ┌──────────────────────────┐  │
-│   │   Chat Panel     │     │   PDF Viewer Panel       │  │
-│   │   engine selector│     │   @react-pdf-viewer      │  │
-│   │   streaming text │     │   word-level highlights  │  │
-│   │   [Page 7] ──────┼────>│   jumpToHighlightArea    │  │
-│   └────────┬─────────┘     └──────────────────────────┘  │
+│   │   Chat Panel      │     │   PDF Viewer Panel       │  │
+│   │   streaming text  │     │   @react-pdf-viewer      │  │
+│   │   [Page 7] ───────┼────>│   word-level highlights  │  │
+│   └────────┬──────────┘     └──────────────────────────┘  │
 │            │ SSE                                          │
 └────────────┼─────────────────────────────────────────────┘
              │
@@ -58,33 +61,35 @@ Rather than committing to a single approach, the app offers three engines that s
      ┌───────┼───────────────┐
      │       │               │
   PdfPig  IAnswerEngine    SQLite
-  (bbox)  ├─ RAG (Hybrid)   (data + chunks
-          ├─ Anthropic API    + embeddings)
-          └─ Claude CLI
+  (bbox)  ├─ RAG (Quick)    (docs, chunks, FTS5,
+          └─ CLI (Deep)      embeddings, bboxes)
 ```
 
 | Layer | Project | Responsibility |
 |-------|---------|----------------|
-| API | `AskMyPdf.Web` | HTTP endpoints, DTOs, DI configuration |
-| Domain | `AskMyPdf.Core` | Models, `IAnswerEngine` interface |
-| Infrastructure | `AskMyPdf.Infrastructure` | SQLite, PdfPig, Claude API, RAG retrieval, CLI runner, coordinate transforms |
-| Frontend | `client/` | React SPA with split-pane chat + PDF viewer + engine selector |
+| API | `AskMyPdf.Web` | HTTP endpoints, DTOs, DI wiring |
+| Domain | `AskMyPdf.Core` | Models (`Citation`, `HighlightArea`, `PageToken`, etc.), `IAnswerEngine` interface |
+| Infrastructure | `AskMyPdf.Infrastructure` | SQLite repositories, PdfPig extraction, Claude API calls, RAG retrieval, CLI runner, coordinate transforms |
+| Frontend | `client/` | React SPA — split-pane chat + PDF viewer, SSE streaming, citation navigation |
+
+---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Backend | .NET 8, C# 12, Minimal API |
-| Frontend | React 18, TypeScript (strict), Vite |
-| Styling | Tailwind CSS, shadcn/ui |
-| PDF Viewer | @react-pdf-viewer/core + highlight plugin |
-| LLM | Anthropic Claude API (Sonnet for answers, Haiku for citation focus) |
-| RAG Retrieval | SQLite FTS5 (BM25) + OpenAI embeddings (cosine similarity), reciprocal rank fusion |
-| CLI Engine | Claude Code CLI (subprocess, structured JSON output) |
-| PDF Parsing | PdfPig (word-level bounding box extraction) |
-| Database | SQLite (documents, file blobs, bounding boxes, chunks, embeddings, FTS5 index) |
-| Deployment | Docker, Caddy (HTTPS reverse proxy) |
-| Testing | xUnit, FluentAssertions (65 tests) |
+| Component | Technology | Why |
+|-----------|------------|-----|
+| Backend | .NET 8, C# 12, Minimal API | Required constraint; lightweight, async-native |
+| Frontend | React 18, TypeScript (strict), Vite | Best PDF viewer ecosystem; fast dev cycle |
+| Styling | Tailwind CSS + shadcn/ui + Framer Motion | Utility-first CSS, accessible components, smooth animations |
+| PDF Viewer | @react-pdf-viewer 3.12 + highlight plugin | Programmatic `jumpToHighlightArea`, page navigation |
+| LLM | Claude Sonnet 4 via Anthropic SDK | High-quality answers, streaming support |
+| RAG Retrieval | SQLite FTS5 (BM25) + OpenAI embeddings | Hybrid lexical + semantic search; graceful degradation without OpenAI key |
+| PDF Parsing | PdfPig 0.1.14 | Word-level bounding box extraction with Document Layout Analysis |
+| Database | SQLite | Single file, zero infrastructure — stores everything |
+| Deployment | Docker + Caddy (HTTPS) | Multi-stage build, automatic TLS |
+| Testing | xUnit + FluentAssertions | 84 tests covering extraction, transforms, retrieval, and services |
+
+---
 
 ## Getting Started
 
@@ -93,8 +98,8 @@ Rather than committing to a single approach, the app offers three engines that s
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - [Node.js 18+](https://nodejs.org/)
 - [Anthropic API key](https://console.anthropic.com/) (required)
-- [OpenAI API key](https://platform.openai.com/) (optional — enables vector search in RAG engine)
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (optional — enables the CLI engine)
+- [OpenAI API key](https://platform.openai.com/) (optional — enables vector search in RAG mode)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (optional — enables the Deep analysis mode)
 
 ### Setup
 
@@ -107,13 +112,10 @@ cd ask-my-pdf
 cd src/AskMyPdf.Web
 dotnet user-secrets set "Anthropic:ApiKey" "sk-ant-..."
 
-# (Optional) Set OpenAI API key for hybrid vector + FTS5 retrieval in RAG engine
-# Without this, RAG falls back to FTS5-only (still works, just lexical matching only)
+# (Optional) Set OpenAI API key for hybrid vector + FTS5 retrieval
+# Without this, RAG mode uses FTS5 lexical search only — still works
 dotnet user-secrets set "OpenAI:ApiKey" "sk-..."
 cd ../..
-
-# (Optional) Install Claude Code CLI for the CLI engine
-npm install -g @anthropic-ai/claude-code
 
 # Install frontend dependencies
 cd client && npm install && cd ..
@@ -132,7 +134,7 @@ dotnet run --project src/AskMyPdf.Web
 cd client && npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+Open **http://localhost:5173** in your browser.
 
 ### Test
 
@@ -140,142 +142,172 @@ Open http://localhost:5173 in your browser.
 dotnet test AskMyPdf.slnx
 ```
 
-## Key Design Decisions
+---
+
+## How the Pipeline Works
+
+### Upload (PDF ingestion)
+
+```
+PDF file
+  → PdfPig: Document Layout Analysis pipeline
+    - NearestNeighbourWordExtractor: groups characters into words
+    - RecursiveXYCut: segments page into text blocks (columns, paragraphs)
+    - UnsupervisedReadingOrderDetector: determines correct reading sequence
+    - Group words into visual lines by Y-proximity
+  → Canonical page representation: reading-order text + word tokens with bounding boxes
+  → DocumentChunker: split into ~150-char chunks at sentence boundaries
+  → Store in SQLite: file bytes, metadata, page bounds, chunks, FTS5 index
+  → (Optional) OpenAI embeddings for each chunk → stored as BLOB
+```
+
+### Question (streamed via SSE)
+
+```
+User question + document ID
+  → RAG engine:
+    1. FTS5 search (BM25 ranking) + vector search (cosine similarity)
+    2. Merge results with Reciprocal Rank Fusion
+    3. Expand with adjacent chunks for context
+    4. Stream answer from Claude with inline [C3] citations
+    5. Extract chunk IDs via regex → map to chunk text
+  → For each citation:
+    - Load canonical page representation from SQLite
+    - Dense normalized substring match: strip whitespace, diacritics, ligatures (NFKD)
+    - Map matched characters → token indices → bounding boxes
+    - Group tokens by Y-proximity into visual lines
+    - Convert PdfPig coords (bottom-left origin) → viewer coords (top-left, percentages)
+  → Stream text-delta + enriched citations via SSE to frontend
+  → Frontend renders answer + clickable [Page N] chips
+  → Click → PDF viewer jumps to page, highlights passage with yellow overlay
+```
+
+---
+
+## Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Three pluggable engines | `IAnswerEngine` interface lets RAG, Anthropic API, and Claude CLI all produce the same `AnswerStreamEvent` stream, sharing the downstream citation + highlighting pipeline. Users pick the right speed/quality/cost tradeoff. |
-| Hybrid RAG retrieval (FTS5 + vectors) | FTS5 handles keyword queries; vector search handles semantic queries. Reciprocal rank fusion merges both ranked lists. Graceful degradation: works without OpenAI key (FTS5-only). |
-| Small chunks (~150 chars) with context expansion | Small chunks act as precise citation units — the full chunk text IS the citation, so no focus pass is needed. Adjacent chunks are included at query time for surrounding context. |
-| Two-phase citation focusing (Anthropic API engine) | Claude's Citations API often over-cites (whole paragraphs/sections). A second, parallel pass with Haiku extracts just the supporting sentences, producing precise word-level highlights. |
-| Parallel Haiku focus calls | Focus calls are independent per page — `Task.WhenAll` fires them concurrently. Haiku is ~10-20x cheaper and faster than Sonnet for this extractive task. |
-| Direct PDF for Anthropic API engine | Full-context answers outperform chunk-based retrieval on cross-section questions. Prompt caching gives ~90% cost savings on repeat questions. |
-| PdfPig for bounding boxes only | Claude handles text understanding; PdfPig maps `cited_text` → pixel-perfect highlight coordinates via dense character matching with Unicode normalization. |
-| SSE, not WebSocket | Streaming is server-to-client only; SSE is simpler with native Fetch API support. |
-| SQLite, not Postgres | Single-file database, zero infrastructure. Stores documents, file blobs, word bounding boxes, RAG chunks, FTS5 index, and vector embeddings. |
-| React 18, not 19 | @react-pdf-viewer compatibility (archived March 2026 with React 18 support). |
-| No EF Core | Direct ADO.NET with parameterized queries for full control and simplicity. |
+| **Pluggable engine interface** | `IAnswerEngine` lets both engines produce the same `AnswerStreamEvent` stream. The downstream citation + highlighting pipeline is completely engine-agnostic. Adding a new engine means implementing one interface. |
+| **Hybrid RAG with RRF** | FTS5 catches keyword queries ("revenue 2024"); vector search catches semantic queries ("how much money did they make"). Reciprocal Rank Fusion merges both ranked lists without needing to normalize scores. Falls back to FTS5-only without an OpenAI key. |
+| **Small chunks (~150 chars)** | Each chunk is 1–2 sentences. The full chunk text IS the citation — no post-processing or "focus pass" needed. Small chunks also mean more precise retrieval. |
+| **Canonical page representation** | Reading order is solved once at upload time using PdfPig's DLA pipeline. At query time, citation matching is a simple normalized substring search — no spatial reordering or heuristics. |
+| **Dense Unicode normalization** | Cited text is matched against page text after stripping whitespace, lowercasing, removing diacritics, and decomposing ligatures (ﬁ→fi via NFKD). This handles the mismatch between LLM-generated citations and raw PDF text. |
+| **SSE, not WebSocket** | Streaming is server-to-client only. SSE is simpler, works with native Fetch API, and auto-reconnects. |
+| **SQLite for everything** | Single file, zero infrastructure. Stores documents, file blobs, word bounding boxes, chunks, FTS5 index, and vector embeddings. No Postgres, no Redis, no vector database. |
+| **No EF Core** | Direct ADO.NET with parameterized queries. Full control, no magic, fewer dependencies. |
+| **React 18, not 19** | @react-pdf-viewer requires React 18 (last updated March 2026). |
+
+---
 
 ## Docker Deployment
 
-The app ships with a multi-stage Dockerfile and Caddy reverse proxy:
+The app ships with a multi-stage Dockerfile (frontend build → backend publish → runtime with Node.js + Claude CLI) and Caddy for automatic HTTPS.
 
 ```bash
 # Build and run locally
 docker compose up --build
 
-# Production (uses pre-built image from GHCR)
+# Production (pre-built image)
 ANTHROPIC_API_KEY=sk-ant-... docker compose -f docker-compose.prod.yml up -d
 ```
 
-The Docker image includes Node.js and the Claude Code CLI, so all three engines work out of the box.
-
-### Configuration (environment variables)
+### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `Anthropic__ApiKey` | *(required)* | Anthropic API key |
-| `Anthropic__AnswerModel` | `claude-sonnet-4-20250514` | Model for Q&A answers |
-| `Anthropic__FocusModel` | `claude-haiku-4-5-20251001` | Model for citation focusing |
-| `OpenAI__ApiKey` | *(optional)* | OpenAI API key for vector embeddings (enables hybrid RAG retrieval) |
-| `OpenAI__EmbeddingModel` | `text-embedding-3-small` | OpenAI embedding model |
-| `OpenAI__Dimensions` | `1536` | Embedding vector dimensions |
+| `OpenAI__ApiKey` | *(optional)* | Enables vector embeddings for hybrid RAG retrieval |
 | `Rag__Enabled` | `true` | Enable/disable RAG engine |
-| `Rag__Model` | `claude-sonnet-4-20250514` | Model for RAG answer generation |
+| `Rag__Model` | `claude-sonnet-4-20250514` | Model for answer generation |
 | `Rag__TopK` | `8` | Number of chunks to retrieve |
 | `ClaudeCli__Enabled` | `true` | Enable/disable CLI engine |
-| `ClaudeCli__BinaryPath` | `claude` | Path to Claude CLI binary |
+| `ClaudeCli__BinaryPath` | `claude` | Path to Claude Code binary |
 | `ClaudeCli__TimeoutSeconds` | `120` | CLI subprocess timeout |
-| `Database__Path` | `askmypdf.db` | SQLite database file path |
+| `Database__Path` | `askmypdf.db` | SQLite file path |
+
+---
 
 ## Project Structure
 
 ```
 ask-my-pdf/
 ├── src/
-│   ├── AskMyPdf.Core/              # Domain models, IAnswerEngine interface
-│   │   ├── Models/                # Document, Citation, HighlightArea, WordBoundingBox, etc.
-│   │   └── Services/              # IAnswerEngine, DocumentService, QuestionService
-│   ├── AskMyPdf.Infrastructure/    # SQLite, PdfPig, Claude API, RAG, CLI runner
-│   │   ├── Ai/                    # AnthropicAnswerEngine, RagAnswerEngine, ClaudeCliEngine
+│   ├── AskMyPdf.Core/              # Domain models + IAnswerEngine interface
+│   │   ├── Models/                # Document, Citation, HighlightArea, PageToken, etc.
+│   │   └── Services/              # IAnswerEngine contract
+│   ├── AskMyPdf.Infrastructure/    # All implementations
+│   │   ├── Ai/                    # RagAnswerEngine, ClaudeCliEngine, EmbeddingService
 │   │   ├── Pdf/                   # BoundingBoxExtractor, CoordinateTransformer, DocumentChunker
-│   │   ├── Data/                  # SqliteDb (documents, chunks, embeddings, FTS5)
-│   │   └── Services/              # DocumentService, QuestionService implementations
-│   └── AskMyPdf.Web/               # Minimal API endpoints + DI + static files
+│   │   ├── Data/                  # SqliteDb, DocumentRepository, ChunkRepository
+│   │   └── Services/              # DocumentService, QuestionService
+│   └── AskMyPdf.Web/               # Minimal API — endpoints, DTOs, DI
 │       ├── Endpoints/             # DocumentEndpoints, QuestionEndpoints
 │       └── Dtos/                  # QuestionRequest, DocumentDto, UploadResponse
 ├── client/                          # React 18 + Vite + TypeScript
 │   └── src/
 │       ├── components/
-│       │   ├── chat/              # ChatPanel, MessageBubble, CitationChip
+│       │   ├── chat/              # ChatPanel, MessageBubble, CitationChip, markdown rendering
 │       │   ├── pdf/               # PdfViewerPanel, HighlightLayer
 │       │   ├── upload/            # UploadDropzone, DocumentList
-│       │   ├── layout/            # AppLayout, MobileHeader, MobileTabBar
-│       │   └── ui/                # Button, Input, Sheet, Skeleton, EngineSelector
-│       ├── hooks/                 # useDocumentChat (SSE), useIsMobile, useMediaQuery
-│       └── lib/                   # api.ts, types.ts
+│       │   ├── layout/            # AppLayout (desktop 3-column / mobile tab bar)
+│       │   └── ui/                # shadcn/ui + EngineSelector
+│       ├── hooks/                 # useDocumentChat (SSE), useDocumentManager, useTheme
+│       └── lib/                   # API client, types, utilities
 ├── tests/
-│   └── AskMyPdf.Tests/             # xUnit + FluentAssertions (65 tests)
-├── Dockerfile                       # Multi-stage build (frontend + backend + CLI)
-├── docker-compose.yml               # Local development
-├── docker-compose.prod.yml          # Production with Caddy HTTPS
-├── Caddyfile                        # Caddy reverse proxy config
-├── AskMyPdf.slnx
-└── Directory.Build.props
+│   └── AskMyPdf.Tests/             # 84 xUnit tests
+├── Dockerfile                       # Multi-stage: Node → .NET SDK → runtime
+├── docker-compose.yml               # Local dev with Caddy
+├── docker-compose.prod.yml          # Production with HTTPS
+├── Caddyfile
+└── AskMyPdf.slnx
 ```
+
+---
+
+## API Reference
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/api/engines` | List available answer engines |
+| `POST` | `/api/documents/upload` | Upload PDF (multipart/form-data) |
+| `GET` | `/api/documents` | List all documents |
+| `GET` | `/api/documents/{id}` | Get document metadata |
+| `GET` | `/api/documents/{id}/file` | Download PDF file |
+| `DELETE` | `/api/documents/{id}` | Delete document and all related data |
+| `POST` | `/api/questions` | Stream answer via SSE (`text-delta`, `citation`, `done` events) |
+
+---
 
 ## Known Limitations
 
 - **100-page PDF limit** — Claude API context window constraint
-- **32 MB file size limit** — API upload constraint
+- **32 MB file size** — upload limit
 - **Single document per session** — questions are scoped to one document at a time
-- **Left-to-right text only** — bounding box matching assumes LTR scripts (answers support any language)
-- **No conversation memory** — each question is independent (no multi-turn context)
-- **CLI engine is batch, not streaming** — the full answer appears at once (no token-by-token streaming)
-- **Vector search requires OpenAI key** — without it, RAG engine uses FTS5 lexical search only
+- **LTR text only** — bounding box matching assumes left-to-right scripts (answers support any language)
+- **No conversation memory** — each question is independent
+- **Deep mode is batch** — full answer appears at once, no token-by-token streaming
+- **Vector search requires OpenAI key** — without it, RAG uses FTS5 lexical search only
+
+---
 
 ## Troubleshooting
 
-### "Anthropic:ApiKey is required" on startup
-
-Ensure you've set the API key via user secrets:
-
+**"Anthropic:ApiKey is required" on startup** — Set the key via user secrets:
 ```bash
-cd src/AskMyPdf.Web
-dotnet user-secrets set "Anthropic:ApiKey" "sk-ant-..."
+cd src/AskMyPdf.Web && dotnet user-secrets set "Anthropic:ApiKey" "sk-ant-..."
 ```
 
-### PDF upload fails with "could not be processed"
+**PDF upload fails** — Ensure the file is a valid PDF (not a renamed .docx). The app validates `%PDF` magic bytes.
 
-Ensure the file is a valid PDF (not a renamed .docx or image). The app validates PDF magic bytes (`%PDF` header).
+**Slow first question** — The first question on a new document indexes chunks and warms up the model. Subsequent questions are faster.
 
-### Slow first question on a document (Anthropic API engine)
+**RAG returns "No indexed content found"** — Chunks are created during upload. If you uploaded before RAG was enabled, delete and re-upload.
 
-The first question sends the full PDF to Claude and initializes prompt caching. Subsequent questions on the same document are ~90% cheaper and faster due to cache hits.
+**Deep mode not available** — Install the Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
 
-### RAG engine returns "No indexed content found"
-
-Document chunks are created during upload. If you uploaded a document before RAG was enabled, delete and re-upload it to generate chunks.
-
-### Claude Code CLI engine not available
-
-Ensure the CLI is installed and on PATH:
-
-```bash
-npm install -g @anthropic-ai/claude-code
-claude --version
-```
-
-If running in Docker, the CLI is pre-installed in the image.
-
-### Frontend not loading in production mode
-
-Ensure you've built the frontend and copied the output:
-
-```bash
-cd client && npm run build
-cp -r dist/* ../src/AskMyPdf.Web/wwwroot/
-```
+---
 
 ## License
 

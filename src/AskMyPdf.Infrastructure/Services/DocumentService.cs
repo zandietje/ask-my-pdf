@@ -1,5 +1,6 @@
 namespace AskMyPdf.Infrastructure.Services;
 
+using System.Diagnostics;
 using AskMyPdf.Core.Models;
 using AskMyPdf.Infrastructure.Ai;
 using AskMyPdf.Infrastructure.Data;
@@ -37,6 +38,7 @@ public class DocumentService(
 
         // Index chunks for RAG engine
         var chunkList = chunker.ChunkDocument(doc.Id, pages);
+        AssertChunkFindability(chunkList, pages);
         if (chunkList.Count > 0)
         {
             await chunks.SaveChunksAsync(doc.Id, chunkList);
@@ -66,6 +68,24 @@ public class DocumentService(
 
     public Task<bool> DeleteAsync(string id) =>
         documents.DeleteDocumentAsync(id);
+
+    /// <summary>
+    /// DEBUG-only: verifies every chunk is findable in its page's canonical text via dense matching.
+    /// Elided entirely in Release builds by [Conditional].
+    /// </summary>
+    [Conditional("DEBUG")]
+    private static void AssertChunkFindability(List<DocumentChunk> chunkList, List<PageCanonicalData> pages)
+    {
+        var pageMap = pages.ToDictionary(p => p.PageNumber);
+        foreach (var chunk in chunkList)
+        {
+            if (!pageMap.TryGetValue(chunk.PageNumber, out var page)) continue;
+            var chunkDense = CoordinateTransformer.ToDenseNormalized(chunk.ChunkText);
+            var pageDense = CoordinateTransformer.ToDenseNormalized(page.CanonicalText);
+            Debug.Assert(pageDense.Contains(chunkDense, StringComparison.Ordinal),
+                $"Chunk {chunk.ChunkId} on page {chunk.PageNumber} not findable in canonical text");
+        }
+    }
 
     private async Task GenerateAndSaveEmbeddingsAsync(string documentId, List<DocumentChunk> chunkList,
         CancellationToken ct = default)

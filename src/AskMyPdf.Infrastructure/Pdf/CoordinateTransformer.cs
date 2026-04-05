@@ -57,6 +57,13 @@ public class CoordinateTransformer
             }
         }
 
+        // Strategy 3: individual word matching (bag of words) — last resort when
+        // substring/line matching fails (e.g. LLM reworded or reordered the citation)
+        if (matchedTokenIndices.Count == 0)
+        {
+            matchedTokenIndices = FindIndividualWordMatches(citedText, page);
+        }
+
         if (matchedTokenIndices.Count == 0)
             return [];
 
@@ -130,6 +137,40 @@ public class CoordinateTransformer
     }
 
     /// <summary>
+    /// Fallback: splits the cited text into individual words, normalizes each, and matches
+    /// them independently against page tokens. Finds the first occurrence of each word.
+    /// Skips very short words (&lt;3 chars after normalization) to avoid false positives
+    /// from articles and prepositions.
+    /// </summary>
+    internal static List<int> FindIndividualWordMatches(string citedText, PageCanonicalData page)
+    {
+        var words = citedText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var normalizedWords = words
+            .Select(w => ToDenseNormalized(w))
+            .Where(w => w.Length >= 3)
+            .Distinct()
+            .ToHashSet();
+
+        if (normalizedWords.Count == 0)
+            return [];
+
+        // Normalize each page token once
+        var matched = new HashSet<int>();
+        var found = new HashSet<string>();
+
+        for (var i = 0; i < page.Tokens.Count; i++)
+        {
+            var tokenNorm = ToDenseNormalized(page.Tokens[i].Text);
+            if (tokenNorm.Length > 0 && normalizedWords.Contains(tokenNorm) && found.Add(tokenNorm))
+            {
+                matched.Add(i);
+            }
+        }
+
+        return matched.Order().ToList();
+    }
+
+    /// <summary>
     /// Normalizes a string to a dense form: lowercase, diacritics stripped, whitespace removed.
     /// </summary>
     internal static string ToDenseNormalized(string text)
@@ -144,14 +185,15 @@ public class CoordinateTransformer
     }
 
     /// <summary>
-    /// Yields normalized characters: lowercase, whitespace/control stripped, diacritics removed.
+    /// Yields normalized characters: lowercase, whitespace/control stripped, diacritics removed,
+    /// compatibility ligatures decomposed (ﬁ→fi, ﬂ→fl via NFKD).
     /// </summary>
     private static IEnumerable<char> NormalizeChar(char ch)
     {
         if (char.IsWhiteSpace(ch) || char.IsControl(ch))
             yield break;
 
-        var decomposed = ch.ToString().Normalize(NormalizationForm.FormD);
+        var decomposed = ch.ToString().Normalize(NormalizationForm.FormKD);
         foreach (var d in decomposed)
         {
             if (char.GetUnicodeCategory(d) == UnicodeCategory.NonSpacingMark)

@@ -66,7 +66,7 @@ export function EngineSelector({ engines, selected, onChange }: EngineSelectorPr
                   )}
                   <span className="relative z-10 flex items-center justify-center gap-1.5">
                     <Icon className="h-3.5 w-3.5 md:h-3 md:w-3 shrink-0" />
-                    <span className="hidden md:inline">{meta.label}</span>
+                    <span>{meta.label}</span>
                   </span>
                 </button>
               </TooltipTrigger>

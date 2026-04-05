@@ -242,9 +242,129 @@ public class CoordinateTransformerTests
     [Fact]
     public void ToDenseNormalized_Strips_Diacritics()
     {
-        // "première" with ë (U+00EB) → "premiere"
+        // "première" with è (U+00E8) → "premiere"
         CoordinateTransformer.ToDenseNormalized("premi\u00e8re keer")
             .Should().Be("premierekeer");
+    }
+
+    [Fact]
+    public void ToDenseNormalized_Decomposes_Ligatures()
+    {
+        // ﬁ (U+FB01) → "fi", ﬂ (U+FB02) → "fl" via NFKD
+        CoordinateTransformer.ToDenseNormalized("\uFB01nd \uFB02ow")
+            .Should().Be("findflow");
+    }
+
+    [Fact]
+    public void ToHighlightAreas_Diacritics_Matched_Through_Pipeline()
+    {
+        // Page has accented text, citation has plain ASCII — should still match
+        var pages = new List<PageCanonicalData>
+        {
+            CreatePage(1, 200, 200,
+                ("premi\u00e8re", 10, 100, 60, 112),
+                ("keer", 65, 100, 90, 112))
+        };
+
+        _transformer.ToHighlightAreas("premiere keer", 1, pages)
+            .Should().HaveCount(1, "diacritics should not prevent matching");
+    }
+
+    [Fact]
+    public void ToHighlightAreas_Ligatures_Matched_Through_Pipeline()
+    {
+        // Page has ligature ﬁ, citation has plain "fi" — should match via NFKD
+        var pages = new List<PageCanonicalData>
+        {
+            CreatePage(1, 200, 200,
+                ("\uFB01nd", 10, 100, 40, 112),
+                ("the", 45, 100, 65, 112),
+                ("\uFB02ow", 70, 100, 100, 112))
+        };
+
+        _transformer.ToHighlightAreas("find the flow", 1, pages)
+            .Should().HaveCount(1, "ligatures should decompose and match via NFKD");
+    }
+
+    // --- Individual word matching (Strategy 3) tests ---
+
+    [Fact]
+    public void ToHighlightAreas_IndividualWords_Fallback_When_Substring_Fails()
+    {
+        // Words exist on page but not as a contiguous substring
+        var pages = new List<PageCanonicalData>
+        {
+            CreatePage(1, 200, 200,
+                ("The", 10, 100, 30, 112),
+                ("revenue", 35, 100, 80, 112),
+                ("grew", 85, 100, 110, 112),
+                ("significantly", 10, 78, 80, 90),
+                ("last", 85, 78, 105, 90),
+                ("year", 110, 78, 135, 90))
+        };
+
+        // This exact phrase doesn't appear contiguously — words are reordered
+        var areas = _transformer.ToHighlightAreas("year revenue significantly", 1, pages);
+
+        areas.Should().NotBeEmpty("individual word matching should find each word separately");
+    }
+
+    [Fact]
+    public void ToHighlightAreas_IndividualWords_Skips_Short_Words()
+    {
+        var pages = new List<PageCanonicalData>
+        {
+            CreatePage(1, 200, 200,
+                ("A", 10, 100, 20, 112),
+                ("revenue", 25, 100, 80, 112))
+        };
+
+        // "A" is too short (< 3 chars after normalization) — only "revenue" should match
+        var areas = _transformer.ToHighlightAreas("is a of revenue", 1, pages);
+
+        areas.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void ToHighlightAreas_IndividualWords_Not_Used_When_Substring_Matches()
+    {
+        // Ensure Strategy 1 takes precedence — substring match returns contiguous highlight
+        var pages = new List<PageCanonicalData>
+        {
+            CreatePage(1, 200, 200,
+                ("quick", 10, 100, 40, 112),
+                ("brown", 45, 100, 80, 112),
+                ("fox", 85, 100, 105, 112))
+        };
+
+        var areas = _transformer.ToHighlightAreas("quick brown", 1, pages);
+
+        areas.Should().HaveCount(1, "substring match should produce one contiguous area");
+    }
+
+    [Fact]
+    public void FindIndividualWordMatches_Returns_FirstOccurrence_Only()
+    {
+        var page = CreatePage(1, 200, 200,
+            ("revenue", 10, 100, 60, 112),
+            ("grew", 65, 100, 90, 112),
+            ("revenue", 10, 78, 60, 90));   // second occurrence of "revenue"
+
+        var indices = CoordinateTransformer.FindIndividualWordMatches("revenue grew", page);
+
+        // Should find "revenue" at index 0 (first occurrence) and "grew" at index 1
+        indices.Should().BeEquivalentTo([0, 1]);
+    }
+
+    [Fact]
+    public void FindIndividualWordMatches_Empty_When_No_Words_Long_Enough()
+    {
+        var page = CreatePage(1, 200, 200,
+            ("Hello", 10, 100, 50, 112));
+
+        var indices = CoordinateTransformer.FindIndividualWordMatches("a I to", page);
+
+        indices.Should().BeEmpty("all words are too short after normalization");
     }
 
     // --- Line grouping tests ---
