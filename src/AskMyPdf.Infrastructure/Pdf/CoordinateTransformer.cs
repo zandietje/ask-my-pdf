@@ -377,30 +377,10 @@ public class CoordinateTransformer
     }
 
     internal static List<List<WordBoundingBox>> GroupWordsIntoLines(List<WordBoundingBox> words)
-    {
-        if (words.Count == 0) return [];
+        => PageTextBuilder.GroupWordsIntoLines(words);
 
-        var lines = new List<List<WordBoundingBox>> { new() { words[0] } };
-        for (var i = 1; i < words.Count; i++)
-        {
-            if (Math.Abs(words[i].Top - lines[^1][^1].Top) <= LineTolerance)
-                lines[^1].Add(words[i]);
-            else
-                lines.Add([words[i]]);
-        }
-        return lines;
-    }
-
-    /// <summary>
-    /// Reconstructs readable text from the word bounding boxes on a page.
-    /// Groups words into visual lines and joins with spaces/newlines.
-    /// </summary>
     public static string ReconstructPageText(PageBoundingData page)
-    {
-        var lines = GroupWordsIntoLines(page.Words);
-        return string.Join("\n", lines.Select(line =>
-            string.Join(" ", line.Select(w => w.Text))));
-    }
+        => PageTextBuilder.ReconstructPageText(page);
 
     internal static List<HighlightArea> GroupIntoHighlightAreas(
         List<WordBoundingBox> matchedWords,

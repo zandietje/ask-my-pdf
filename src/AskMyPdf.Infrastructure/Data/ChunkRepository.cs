@@ -157,14 +157,25 @@ public class ChunkRepository(DbConnectionFactory db)
     internal static string SanitizeFtsQuery(string query)
     {
         var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Select(t => t.Replace("\"", "").Trim())
+            .Select(t => StripFtsOperators(t).Trim())
             .Where(t => t.Length >= 2 && !StopWords.Contains(t))
             .ToList();
 
         if (tokens.Count == 0)
-            return $"\"{query.Replace("\"", "")}\"";
+            return $"\"{StripFtsOperators(query)}\"";
 
         return string.Join(" OR ", tokens.Select(t => $"\"{t}\""));
+    }
+
+    private static string StripFtsOperators(string token)
+    {
+        var sb = new System.Text.StringBuilder(token.Length);
+        foreach (var ch in token)
+        {
+            if (ch is not ('"' or '*' or '^' or '+' or '-' or '(' or ')'))
+                sb.Append(ch);
+        }
+        return sb.ToString();
     }
 
     private static DocumentChunk ReadChunk(SqliteDataReader reader) =>

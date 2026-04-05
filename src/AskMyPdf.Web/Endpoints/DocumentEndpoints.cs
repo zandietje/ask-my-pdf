@@ -15,7 +15,7 @@ public static class DocumentEndpoints
     {
         var group = app.MapGroup("/api/documents");
 
-        group.MapPost("/upload", async (IFormFile file, DocumentService svc, ILoggerFactory loggerFactory) =>
+        group.MapPost("/upload", async (IFormFile file, DocumentService svc, HttpContext ctx, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger("AskMyPdf.DocumentEndpoints");
             if (file.Length == 0)
@@ -28,7 +28,7 @@ public static class DocumentEndpoints
             // Read into memory for magic bytes check + processing
             using var ms = new MemoryStream();
             await using var fileStream = file.OpenReadStream();
-            await fileStream.CopyToAsync(ms);
+            await fileStream.CopyToAsync(ms, ctx.RequestAborted);
             var bytes = ms.ToArray();
 
             // Validate PDF magic bytes
@@ -37,7 +37,7 @@ public static class DocumentEndpoints
 
             try
             {
-                var doc = await svc.UploadAsync(bytes, file.FileName, file.Length);
+                var doc = await svc.UploadAsync(bytes, file.FileName, file.Length, ctx.RequestAborted);
                 return Results.Ok(new UploadResponse(doc.Id, doc.FileName, doc.PageCount, doc.FileSize));
             }
             catch (InvalidOperationException ex)

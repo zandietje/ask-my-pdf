@@ -159,7 +159,7 @@ public class RagAnswerEngine(
     /// Reciprocal Rank Fusion: merges two ranked lists into one.
     /// RRF_score(d) = sum(1 / (k + rank_i(d))) for each retrieval system i.
     /// </summary>
-    private static List<DocumentChunk> ReciprocalRankFusion(
+    internal static List<DocumentChunk> ReciprocalRankFusion(
         List<DocumentChunk> ftsResults,
         List<(int ChunkIndex, double Score)> vectorResults,
         Dictionary<int, DocumentChunk> chunkMap)
@@ -191,7 +191,7 @@ public class RagAnswerEngine(
     /// Expands retrieved chunks with adjacent context (one chunk before and after each).
     /// This gives Claude surrounding context without expanding the retrieval set too broadly.
     /// </summary>
-    private static List<DocumentChunk> ExpandWithContext(
+    internal static List<DocumentChunk> ExpandWithContext(
         List<DocumentChunk> retrieved, Dictionary<int, DocumentChunk> chunkMap)
     {
         var includeIndices = new HashSet<int>();

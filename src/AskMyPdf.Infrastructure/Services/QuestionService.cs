@@ -95,7 +95,7 @@ public class QuestionService(
                     if (page is null || page.Words.Count == 0)
                         return (Citation?)null;
 
-                    var pageText = CoordinateTransformer.ReconstructPageText(page);
+                    var pageText = PageTextBuilder.ReconstructPageText(page);
                     var focusedText = await focuser.FocusCitationAsync(
                         pageText, question, completeAnswer, ct);
 

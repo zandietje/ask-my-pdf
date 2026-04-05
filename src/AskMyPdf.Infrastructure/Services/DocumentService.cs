@@ -17,7 +17,8 @@ public class DocumentService(
     private const int MaxPageCount = 100;
     private const int EmbeddingBatchSize = 50;
 
-    public async Task<Document> UploadAsync(byte[] pdfBytes, string fileName, long fileSize)
+    public async Task<Document> UploadAsync(byte[] pdfBytes, string fileName, long fileSize,
+        CancellationToken ct = default)
     {
         var pages = extractor.ExtractWordBounds(pdfBytes);
 
@@ -43,7 +44,7 @@ public class DocumentService(
             // Generate vector embeddings (if OpenAI is configured)
             if (embeddings.IsAvailable)
             {
-                await GenerateAndSaveEmbeddingsAsync(doc.Id, chunkList);
+                await GenerateAndSaveEmbeddingsAsync(doc.Id, chunkList, ct);
             }
             else
             {
@@ -66,7 +67,8 @@ public class DocumentService(
     public Task<bool> DeleteAsync(string id) =>
         documents.DeleteDocumentAsync(id);
 
-    private async Task GenerateAndSaveEmbeddingsAsync(string documentId, List<DocumentChunk> chunkList)
+    private async Task GenerateAndSaveEmbeddingsAsync(string documentId, List<DocumentChunk> chunkList,
+        CancellationToken ct = default)
     {
         try
         {
@@ -78,7 +80,7 @@ public class DocumentService(
                 var batch = chunkList.Skip(i).Take(EmbeddingBatchSize).ToList();
                 var texts = batch.Select(c => c.ChunkText).ToList();
 
-                var vectors = await embeddings.GenerateEmbeddingsAsync(texts);
+                var vectors = await embeddings.GenerateEmbeddingsAsync(texts, ct);
                 if (vectors is null)
                 {
                     logger.LogWarning("Embedding generation failed for batch {BatchStart}-{BatchEnd}, skipping embeddings",

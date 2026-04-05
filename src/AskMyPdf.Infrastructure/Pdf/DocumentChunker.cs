@@ -15,7 +15,7 @@ public class DocumentChunker
 
         foreach (var page in pages)
         {
-            var pageText = CoordinateTransformer.ReconstructPageText(page);
+            var pageText = PageTextBuilder.ReconstructPageText(page);
             if (string.IsNullOrWhiteSpace(pageText))
                 continue;
 
