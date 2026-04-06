@@ -224,6 +224,7 @@ ANTHROPIC_API_KEY=sk-ant-... docker compose -f docker-compose.prod.yml up -d
 | `ClaudeCli__Enabled` | `true` | Enable/disable CLI engine |
 | `ClaudeCli__BinaryPath` | `claude` | Path to Claude Code binary |
 | `ClaudeCli__TimeoutSeconds` | `120` | CLI subprocess timeout |
+| `ClaudeCli__MaxTurns` | `2` | Max agentic turns for CLI engine |
 | `Database__Path` | `askmypdf.db` | SQLite file path |
 
 ---
