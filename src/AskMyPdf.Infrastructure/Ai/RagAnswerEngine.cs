@@ -30,6 +30,11 @@ public class RagAnswerEngine(
     private static readonly Regex ChunkIdPattern = new(@"C(\d+)", RegexOptions.Compiled);
     private const int RrfK = 60; // Reciprocal rank fusion constant
 
+    // Documents with ≤ this many chunks skip retrieval and send all chunks.
+    // At 150 chars/chunk, 50 chunks ≈ 1,250 tokens — under 1% of Claude's 200K context window.
+    // Covers documents up to ~5-10 pages (CVs, forms, short contracts).
+    private const int SmallDocumentChunkThreshold = 50;
+
     public async IAsyncEnumerable<AnswerStreamEvent> StreamRawAnswerAsync(
         string question, byte[] pdfBytes, string fileName, string documentId,
         [EnumeratorCancellation] CancellationToken ct = default)
@@ -45,23 +50,35 @@ public class RagAnswerEngine(
         }
 
         var chunkMap = allChunks.ToDictionary(c => c.ChunkIndex);
-        var retrieved = await HybridRetrieveAsync(documentId, question, chunkMap, ct);
 
-        if (retrieved.Count == 0)
+        // Small documents: send all chunks — avoids keyword-mismatch retrieval failures
+        List<DocumentChunk> contextChunks;
+        if (allChunks.Count <= SmallDocumentChunkThreshold)
         {
-            yield return new AnswerStreamEvent.TextDelta(
-                "I could not find relevant content in this document for your question.");
-            yield return new AnswerStreamEvent.Done();
-            yield break;
+            contextChunks = allChunks;
+            logger.LogInformation(
+                "RAG: small document ({ChunkCount} chunks), sending all chunks for {DocId}",
+                allChunks.Count, documentId);
         }
+        else
+        {
+            var retrieved = await HybridRetrieveAsync(documentId, question, chunkMap, ct);
 
-        // 2. Add context window: include adjacent chunks for surrounding context
-        var contextChunks = ExpandWithContext(retrieved, chunkMap);
+            if (retrieved.Count == 0)
+            {
+                yield return new AnswerStreamEvent.TextDelta(
+                    "I could not find relevant content in this document for your question.");
+                yield return new AnswerStreamEvent.Done();
+                yield break;
+            }
 
-        logger.LogInformation(
-            "RAG: retrieved {RetrievedCount} chunks (expanded to {ContextCount} with context) for document {DocId}, pages: {Pages}",
-            retrieved.Count, contextChunks.Count, documentId,
-            string.Join(", ", contextChunks.Select(c => c.PageNumber).Distinct().Order()));
+            contextChunks = ExpandWithContext(retrieved, chunkMap);
+
+            logger.LogInformation(
+                "RAG: retrieved {RetrievedCount} chunks (expanded to {ContextCount} with context) for document {DocId}, pages: {Pages}",
+                retrieved.Count, contextChunks.Count, documentId,
+                string.Join(", ", contextChunks.Select(c => c.PageNumber).Distinct().Order()));
+        }
 
         // 3. Build context block with chunk IDs
         var context = BuildContext(contextChunks);
