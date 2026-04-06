@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 public class DocumentService(
     BoundingBoxExtractor extractor,
     DocumentChunker chunker,
+    ContextualChunkEnricher enricher,
     EmbeddingService embeddings,
     DocumentRepository documents,
     ChunkRepository chunks,
@@ -39,6 +40,10 @@ public class DocumentService(
         // Index chunks for RAG engine
         var chunkList = chunker.ChunkDocument(doc.Id, pages);
         AssertChunkFindability(chunkList, pages);
+
+        // Enrich chunks with contextual retrieval (Haiku generates short context prefix per chunk)
+        chunkList = await enricher.EnrichChunksAsync(chunkList, pages, ct);
+
         if (chunkList.Count > 0)
         {
             await chunks.SaveChunksAsync(doc.Id, chunkList);
@@ -98,7 +103,7 @@ public class DocumentService(
             for (var i = 0; i < chunkList.Count; i += EmbeddingBatchSize)
             {
                 var batch = chunkList.Skip(i).Take(EmbeddingBatchSize).ToList();
-                var texts = batch.Select(c => c.ChunkText).ToList();
+                var texts = batch.Select(c => c.SearchableText).ToList();
 
                 var vectors = await embeddings.GenerateEmbeddingsAsync(texts, ct);
                 if (vectors is null)

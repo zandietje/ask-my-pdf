@@ -106,7 +106,8 @@ public partial class ClaudeCliRunner(ClaudeCliOptions options, ILogger<ClaudeCli
     private string BuildArgs(string prompt)
     {
         var escaped = prompt.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        return $"-p \"{escaped}\" --output-format json --max-turns {options.MaxTurns}";
+        var modelFlag = string.IsNullOrWhiteSpace(options.Model) ? "" : $" --model {options.Model}";
+        return $"-p \"{escaped}\" --output-format json --max-turns {options.MaxTurns}{modelFlag}";
     }
 
     /// <summary>

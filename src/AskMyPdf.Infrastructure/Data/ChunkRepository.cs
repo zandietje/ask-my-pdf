@@ -15,13 +15,14 @@ public class ChunkRepository(DbConnectionFactory db)
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = (SqliteTransaction)tx;
             cmd.CommandText = """
-                INSERT INTO document_chunks (document_id, page_number, chunk_index, chunk_text)
-                VALUES (@docId, @page, @idx, @text)
+                INSERT INTO document_chunks (document_id, page_number, chunk_index, chunk_text, enriched_text)
+                VALUES (@docId, @page, @idx, @text, @enriched)
                 """;
             cmd.Parameters.AddWithValue("@docId", documentId);
             cmd.Parameters.AddWithValue("@page", chunk.PageNumber);
             cmd.Parameters.AddWithValue("@idx", chunk.ChunkIndex);
             cmd.Parameters.AddWithValue("@text", chunk.ChunkText);
+            cmd.Parameters.AddWithValue("@enriched", (object?)chunk.EnrichedText ?? DBNull.Value);
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -36,7 +37,7 @@ public class ChunkRepository(DbConnectionFactory db)
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT c.document_id, c.page_number, c.chunk_index, c.chunk_text
+            SELECT c.document_id, c.page_number, c.chunk_index, c.chunk_text, c.enriched_text
             FROM document_chunks c
             JOIN document_chunks_fts f ON f.rowid = c.id
             WHERE c.document_id = @docId
@@ -62,7 +63,7 @@ public class ChunkRepository(DbConnectionFactory db)
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT document_id, page_number, chunk_index, chunk_text
+            SELECT document_id, page_number, chunk_index, chunk_text, enriched_text
             FROM document_chunks
             WHERE document_id = @docId
             ORDER BY chunk_index
@@ -145,6 +146,7 @@ public class ChunkRepository(DbConnectionFactory db)
 
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {
+        // English
         "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
         "have", "has", "had", "do", "does", "did", "will", "would", "could",
         "should", "may", "might", "can", "shall", "to", "of", "in", "for",
@@ -152,6 +154,14 @@ public class ChunkRepository(DbConnectionFactory db)
         "what", "which", "who", "whom", "this", "that", "these", "those",
         "it", "its", "and", "but", "or", "not", "no", "if", "how", "when",
         "where", "why",
+        // Dutch
+        "de", "het", "een", "en", "van", "ik", "te", "dat", "die", "in",
+        "op", "hij", "het", "met", "als", "aan", "voor", "had", "er", "maar",
+        "om", "hem", "dan", "zou", "wat", "mijn", "men", "dit", "zo", "door",
+        "over", "ze", "bij", "ook", "tot", "je", "mij", "uit", "der", "daar",
+        "haar", "naar", "heb", "hoe", "heeft", "hebben", "deze", "meer", "doch",
+        "doe", "werd", "worden", "nog", "zal", "zelf", "geen", "kan", "hun",
+        "wel", "zijn", "ben", "was", "veel", "niet", "wij", "zij",
     };
 
     internal static string SanitizeFtsQuery(string query)
@@ -182,7 +192,8 @@ public class ChunkRepository(DbConnectionFactory db)
         new(reader.GetString(0),
             reader.GetInt32(1),
             reader.GetInt32(2),
-            reader.GetString(3));
+            reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4));
 
     private static byte[] FloatsToBytes(float[] floats)
     {

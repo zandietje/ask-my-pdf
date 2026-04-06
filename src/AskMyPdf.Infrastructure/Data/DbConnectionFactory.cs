@@ -47,6 +47,7 @@ public class DbConnectionFactory(string dbPath)
                 page_number INTEGER NOT NULL,
                 chunk_index INTEGER NOT NULL,
                 chunk_text TEXT NOT NULL,
+                enriched_text TEXT,
                 UNIQUE(document_id, chunk_index)
             );
 
@@ -58,12 +59,13 @@ public class DbConnectionFactory(string dbPath)
             );
 
             CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON document_chunks BEGIN
-                INSERT INTO document_chunks_fts(rowid, chunk_text) VALUES (new.id, new.chunk_text);
+                INSERT INTO document_chunks_fts(rowid, chunk_text)
+                VALUES (new.id, COALESCE(new.enriched_text, new.chunk_text));
             END;
 
             CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON document_chunks BEGIN
                 INSERT INTO document_chunks_fts(document_chunks_fts, rowid, chunk_text)
-                VALUES('delete', old.id, old.chunk_text);
+                VALUES('delete', old.id, COALESCE(old.enriched_text, old.chunk_text));
             END;
 
             CREATE TABLE IF NOT EXISTS chunk_embeddings (
@@ -74,5 +76,34 @@ public class DbConnectionFactory(string dbPath)
             );
             """;
         await cmd.ExecuteNonQueryAsync();
+
+        // Migration: add enriched_text column if missing (existing DBs)
+        try
+        {
+            await using var alterCmd = conn.CreateCommand();
+            alterCmd.CommandText = "ALTER TABLE document_chunks ADD COLUMN enriched_text TEXT";
+            await alterCmd.ExecuteNonQueryAsync();
+        }
+        catch (SqliteException)
+        {
+            // Column already exists — ignore
+        }
+
+        // Recreate FTS5 triggers to use enriched_text (idempotent via DROP IF EXISTS)
+        await using var triggerCmd = conn.CreateCommand();
+        triggerCmd.CommandText = """
+            DROP TRIGGER IF EXISTS chunks_ai;
+            CREATE TRIGGER chunks_ai AFTER INSERT ON document_chunks BEGIN
+                INSERT INTO document_chunks_fts(rowid, chunk_text)
+                VALUES (new.id, COALESCE(new.enriched_text, new.chunk_text));
+            END;
+
+            DROP TRIGGER IF EXISTS chunks_ad;
+            CREATE TRIGGER chunks_ad AFTER DELETE ON document_chunks BEGIN
+                INSERT INTO document_chunks_fts(document_chunks_fts, rowid, chunk_text)
+                VALUES('delete', old.id, COALESCE(old.enriched_text, old.chunk_text));
+            END;
+            """;
+        await triggerCmd.ExecuteNonQueryAsync();
     }
 }

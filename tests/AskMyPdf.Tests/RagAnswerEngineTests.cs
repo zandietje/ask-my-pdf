@@ -188,4 +188,84 @@ public class RagAnswerEngineTests
         expanded.Should().HaveCount(4);
         expanded.Select(c => c.ChunkIndex).Should().BeEquivalentTo([0, 1, 2, 3]);
     }
+
+    // --- Citation narrowing ---
+
+    [Fact]
+    public void ExtractCitingSentence_Finds_Sentence_Before_Citation()
+    {
+        var answer = "The company grew significantly. Revenue increased by 15% [C3] while costs decreased.";
+        var pos = answer.IndexOf("[C3]");
+        var sentence = RagAnswerEngine.ExtractCitingSentence(answer, pos);
+        sentence.Should().Be("Revenue increased by 15%");
+    }
+
+    [Fact]
+    public void ExtractCitingSentence_Returns_Null_For_Short_Text()
+    {
+        var answer = "Yes [C1] confirmed.";
+        var pos = answer.IndexOf("[C1]");
+        var sentence = RagAnswerEngine.ExtractCitingSentence(answer, pos);
+        // "Yes" is less than 15 chars
+        sentence.Should().BeNull();
+    }
+
+    [Fact]
+    public void ExtractCitingSentence_Returns_Null_At_Start()
+    {
+        var answer = "[C1] some text follows.";
+        var sentence = RagAnswerEngine.ExtractCitingSentence(answer, 0);
+        sentence.Should().BeNull();
+    }
+
+    [Fact]
+    public void NarrowCitedText_Finds_Best_Matching_Sentence_In_Chunk()
+    {
+        var citingSentence = "Revenue increased by 15% year-over-year";
+        var chunkText = "ACME Corp reported strong results. Revenue increased by 15% compared to the prior year. Operating margins also improved.";
+        var narrowed = RagAnswerEngine.NarrowCitedText(citingSentence, chunkText);
+        narrowed.Should().Contain("Revenue increased by 15%");
+        narrowed.Length.Should().BeLessThan(chunkText.Length);
+    }
+
+    [Fact]
+    public void NarrowCitedText_Falls_Back_To_Full_Chunk_When_No_Match()
+    {
+        var citingSentence = "Something completely unrelated to the chunk content here";
+        var chunkText = "ACME Corp was founded in 2015. It operates in the fintech sector.";
+        var narrowed = RagAnswerEngine.NarrowCitedText(citingSentence, chunkText);
+        narrowed.Should().Be(chunkText);
+    }
+
+    [Fact]
+    public void NarrowCitedText_Falls_Back_When_Sentence_Is_Null()
+    {
+        var chunkText = "Some chunk text here that is long enough.";
+        RagAnswerEngine.NarrowCitedText(null, chunkText).Should().Be(chunkText);
+    }
+
+    [Fact]
+    public void NarrowCitedText_Falls_Back_When_Sentence_Is_Short()
+    {
+        var chunkText = "Some chunk text here that is long enough.";
+        RagAnswerEngine.NarrowCitedText("short", chunkText).Should().Be(chunkText);
+    }
+
+    [Fact]
+    public void ExtractCitations_Uses_Narrowed_Text()
+    {
+        var chunkMap = new Dictionary<int, DocumentChunk>
+        {
+            [3] = new("doc1", 2, 3,
+                "ACME Corp reported strong results. Revenue increased by 15% compared to the prior year. Operating margins also improved significantly."),
+        };
+
+        var answer = "The company reported strong financial performance. Revenue increased by 15% year-over-year [C3].";
+        var citations = RagAnswerEngine.ExtractCitations(answer, chunkMap, "test.pdf", "doc1");
+
+        citations.Should().HaveCount(1);
+        // Should be narrowed to the matching sentence, not the full chunk
+        citations[0].CitedText.Should().Contain("Revenue increased by 15%");
+        citations[0].CitedText.Length.Should().BeLessThan(chunkMap[3].ChunkText.Length);
+    }
 }

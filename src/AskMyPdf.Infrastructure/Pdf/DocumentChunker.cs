@@ -5,8 +5,8 @@ using AskMyPdf.Core.Models;
 
 public class DocumentChunker
 {
-    private const int TargetChunkSize = 150;   // characters — small so each chunk ≈ 1-2 sentences for precise highlighting
-    private const int OverlapSize = 50;         // characters of overlap between chunks
+    private const int TargetChunkSize = 300;   // characters — ~3-4 sentences, better semantic coherence
+    private const int OverlapSize = 100;        // characters of overlap between chunks
 
     public List<DocumentChunk> ChunkDocument(string documentId, List<PageCanonicalData> pages)
     {
