@@ -27,12 +27,8 @@ public class DocumentServiceTests : IAsyncLifetime
         // EmbeddingService with no API key → embeddings disabled, FTS5-only
         var embeddingOptions = new EmbeddingOptions();
         var embeddingService = new EmbeddingService(new HttpClient(), embeddingOptions, NullLogger<EmbeddingService>.Instance);
-        // ContextualChunkEnricher with Enabled=false → skips enrichment (no API key needed)
-        var enricherOptions = new ContextualRetrievalOptions(Enabled: false);
-        var enricher = new ContextualChunkEnricher(
-            null!, enricherOptions, NullLogger<ContextualChunkEnricher>.Instance);
         _svc = new DocumentService(
-            new BoundingBoxExtractor(), new DocumentChunker(), enricher, embeddingService, _docs, chunks,
+            new BoundingBoxExtractor(), new DocumentChunker(), embeddingService, _docs, chunks,
             NullLogger<DocumentService>.Instance);
     }
 

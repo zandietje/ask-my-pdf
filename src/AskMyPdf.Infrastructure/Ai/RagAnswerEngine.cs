@@ -247,8 +247,9 @@ public class RagAnswerEngine(
 
     /// <summary>
     /// Extracts inline [C&lt;n&gt;] chunk-ID references from the answer and maps them
-    /// to citations. Narrows the cited text to the most relevant sentence within the
-    /// chunk by matching the sentence Claude wrote before the citation marker.
+    /// to citations using the original chunk text for deterministic highlight matching.
+    /// With small chunks (~150 chars ≈ 1-2 sentences), the full chunk text IS the
+    /// precise citation — no focusing needed.
     /// </summary>
     internal static List<Core.Models.Citation> ExtractCitations(
         string answer, Dictionary<int, DocumentChunk> chunkMap, string fileName, string documentId)
@@ -256,131 +257,30 @@ public class RagAnswerEngine(
         var seen = new HashSet<int>();
         var citations = new List<Core.Models.Citation>();
 
+        // Find all bracket groups like [C3], [C3, C7], [C3, C7, C12]
         foreach (Match groupMatch in ChunkCitationGroupPattern.Matches(answer))
         {
-            // Try to extract the sentence Claude wrote before this citation marker
-            var citingSentence = ExtractCitingSentence(answer, groupMatch.Index);
-
+            // Extract individual C<n> IDs from within each bracket group
             foreach (Match idMatch in ChunkIdPattern.Matches(groupMatch.Value))
             {
                 if (!int.TryParse(idMatch.Groups[1].Value, out var chunkIndex))
                     continue;
-                if (!seen.Add(chunkIndex))
+                if (!seen.Add(chunkIndex)) // deduplicate
                     continue;
                 if (!chunkMap.TryGetValue(chunkIndex, out var chunk))
                     continue;
-
-                // Narrow: find the citing sentence within the chunk text
-                var narrowedText = NarrowCitedText(citingSentence, chunk.ChunkText);
 
                 citations.Add(new Core.Models.Citation(
                     DocumentId: documentId,
                     DocumentName: fileName,
                     PageNumber: chunk.PageNumber,
-                    CitedText: narrowedText,
+                    CitedText: chunk.ChunkText,
                     HighlightAreas: [],
                     ChunkIndex: chunkIndex));
             }
         }
 
         return citations;
-    }
-
-    /// <summary>
-    /// Extracts the sentence immediately before the citation marker at the given position.
-    /// Walks backwards from the marker to find the start of the sentence.
-    /// </summary>
-    internal static string? ExtractCitingSentence(string answer, int citationPos)
-    {
-        if (citationPos <= 0) return null;
-
-        // Walk backwards to find the end of the text before the citation marker
-        var end = citationPos;
-        while (end > 0 && char.IsWhiteSpace(answer[end - 1]))
-            end--;
-
-        if (end <= 0) return null;
-
-        // Find the start of this sentence
-        var start = end - 1;
-        while (start > 0 && answer[start - 1] is not ('.' or '!' or '?' or '\n'))
-            start--;
-
-        // Skip leading whitespace
-        while (start < end && char.IsWhiteSpace(answer[start]))
-            start++;
-
-        var sentence = answer[start..end].Trim();
-        return sentence.Length >= 15 ? sentence : null;
-    }
-
-    /// <summary>
-    /// Tries to find the citing sentence (from Claude's answer) within the chunk text.
-    /// Extracts content words from the sentence and finds the best matching sentence
-    /// in the chunk. Falls back to full chunk text if match is too weak.
-    /// </summary>
-    internal static string NarrowCitedText(string? citingSentence, string chunkText)
-    {
-        if (citingSentence is null || citingSentence.Length < 15)
-            return chunkText;
-
-        // Extract significant words (>= 4 chars) from the citing sentence
-        var sentenceWords = citingSentence
-            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-            .Select(w => w.Trim('.', ',', ';', ':', '!', '?', '"', '\'', '(', ')').ToLowerInvariant())
-            .Where(w => w.Length >= 4)
-            .ToHashSet();
-
-        if (sentenceWords.Count < 2)
-            return chunkText;
-
-        // Split chunk into sentences and find the best matching one
-        var chunkSentences = SplitIntoSentences(chunkText);
-        var bestMatch = "";
-        var bestScore = 0;
-
-        foreach (var cs in chunkSentences)
-        {
-            var csWords = cs
-                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-                .Select(w => w.Trim('.', ',', ';', ':', '!', '?', '"', '\'', '(', ')').ToLowerInvariant())
-                .Where(w => w.Length >= 4)
-                .ToHashSet();
-
-            var overlap = sentenceWords.Intersect(csWords).Count();
-            if (overlap > bestScore)
-            {
-                bestScore = overlap;
-                bestMatch = cs.Trim();
-            }
-        }
-
-        // Require at least 40% of the sentence's significant words to match
-        var threshold = Math.Max(2, (int)(sentenceWords.Count * 0.4));
-        return bestScore >= threshold && bestMatch.Length >= 15 ? bestMatch : chunkText;
-    }
-
-    private static List<string> SplitIntoSentences(string text)
-    {
-        var sentences = new List<string>();
-        var start = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] is '.' or '!' or '?')
-            {
-                if (i + 1 >= text.Length || char.IsWhiteSpace(text[i + 1]))
-                {
-                    sentences.Add(text[start..(i + 1)]);
-                    start = i + 1;
-                    while (start < text.Length && char.IsWhiteSpace(text[start]))
-                        start++;
-                    i = start - 1;
-                }
-            }
-        }
-        if (start < text.Length)
-            sentences.Add(text[start..]);
-        return sentences;
     }
 }
 

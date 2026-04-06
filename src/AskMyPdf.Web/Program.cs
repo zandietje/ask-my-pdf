@@ -27,12 +27,6 @@ if (string.IsNullOrWhiteSpace(apiKey))
         "Anthropic:ApiKey is required. Set via user-secrets: dotnet user-secrets set \"Anthropic:ApiKey\" \"sk-ant-...\"");
 builder.Services.AddSingleton(new AnthropicClient(new Anthropic.Core.ClientOptions { ApiKey = apiKey }));
 
-// Contextual retrieval — enriches chunks with Haiku-generated context at upload time
-builder.Services.AddSingleton(new ContextualRetrievalOptions(
-    Enabled: builder.Configuration.GetValue("Rag:ContextualRetrieval", true),
-    Model: builder.Configuration["Rag:ContextualModel"] ?? "claude-haiku-4-5-20251001"));
-builder.Services.AddSingleton<ContextualChunkEnricher>();
-
 // Embeddings — OpenAI (optional, enables hybrid vector+FTS5 retrieval)
 builder.Services.AddHttpClient<EmbeddingService>();
 builder.Services.AddSingleton(new EmbeddingOptions(
@@ -60,8 +54,7 @@ if (cliEnabled)
     builder.Services.AddSingleton(new ClaudeCliOptions(
         BinaryPath: builder.Configuration["ClaudeCli:BinaryPath"] ?? "claude",
         TimeoutSeconds: builder.Configuration.GetValue("ClaudeCli:TimeoutSeconds", 120),
-        MaxTurns: builder.Configuration.GetValue("ClaudeCli:MaxTurns", 5),
-        Model: builder.Configuration["ClaudeCli:Model"]));
+        MaxTurns: builder.Configuration.GetValue("ClaudeCli:MaxTurns", 5)));
     builder.Services.AddSingleton<ClaudeCliRunner>();
     builder.Services.AddSingleton<IAnswerEngine, ClaudeCliEngine>();
 }

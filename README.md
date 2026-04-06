@@ -26,16 +26,14 @@ The app offers two answer engines that share a common citation and highlighting 
 
 | Mode | How it works | Streaming | Best for |
 |------|-------------|-----------|----------|
-| **Quick** (RAG) | Hybrid FTS5 + vector search retrieves relevant chunks, Claude generates a grounded answer with inline chunk citations. Citation narrowing extracts the most relevant sentence for precise highlighting. | Real-time | Fast answers, lower API cost |
+| **Quick** (RAG) | Hybrid FTS5 + vector search retrieves relevant chunks, Claude generates a grounded answer with inline chunk citations. Small chunks (~150 chars) are precise by design — no post-processing needed. | Real-time | Fast answers, lower API cost |
 | **Deep** (Claude CLI) | Runs Claude Code as a subprocess with a structured JSON prompt for multi-pass analysis. Returns exact verbatim snippets with page references. | Batch | Thorough analysis of complex documents |
 
 ### What Makes This Different
 
 - **Every claim is cited** — the LLM is prompted to reference specific chunks, and those references are deterministically mapped back to the document
 - **Word-level highlighting** — PdfPig extracts bounding boxes at the word level; clicking a citation draws precise yellow overlays on the exact text
-- **Contextual Retrieval** — at upload time, each chunk is enriched with a Haiku-generated context prefix (entity names, dates, section topics), improving retrieval accuracy by 35–49% per Anthropic's benchmarks
 - **Hybrid retrieval** — FTS5 (lexical, BM25) and OpenAI embeddings (semantic, cosine similarity) are merged via Reciprocal Rank Fusion, catching both keyword and meaning-based matches
-- **Citation narrowing** — larger chunks (~300 chars) improve answer quality; citation narrowing extracts the best-matching sentence for precise highlighting
 - **Real-time streaming** — answers appear token-by-token via SSE as Claude generates them; citations arrive at the end and are instantly clickable
 - **No vector database** — everything runs on a single SQLite file: documents, file blobs, word bounding boxes, text chunks, FTS5 index, and vector embeddings
 
@@ -84,12 +82,12 @@ The app offers two answer engines that share a common citation and highlighting 
 | Frontend | React 18, TypeScript (strict), Vite | Best PDF viewer ecosystem; fast dev cycle |
 | Styling | Tailwind CSS + shadcn/ui + Framer Motion | Utility-first CSS, accessible components, smooth animations |
 | PDF Viewer | @react-pdf-viewer 3.12 + highlight plugin | Programmatic `jumpToHighlightArea`, page navigation |
-| LLM | Claude Sonnet 4 (answers) + Claude Haiku 4.5 (chunk enrichment) via Anthropic SDK | High-quality answers with contextual retrieval |
-| RAG Retrieval | SQLite FTS5 (BM25) + OpenAI embeddings + Contextual Retrieval | Hybrid lexical + semantic search with enriched chunks; graceful degradation without OpenAI key |
+| LLM | Claude Sonnet 4 via Anthropic SDK | High-quality answers, streaming support |
+| RAG Retrieval | SQLite FTS5 (BM25) + OpenAI embeddings | Hybrid lexical + semantic search; graceful degradation without OpenAI key |
 | PDF Parsing | PdfPig 0.1.14 | Word-level bounding box extraction with Document Layout Analysis |
 | Database | SQLite | Single file, zero infrastructure — stores everything |
 | Deployment | Docker + Caddy (HTTPS) | Multi-stage build, automatic TLS |
-| Testing | xUnit + FluentAssertions | 96 tests covering extraction, transforms, retrieval, citation narrowing, and services |
+| Testing | xUnit + FluentAssertions | 84 tests covering extraction, transforms, retrieval, and services |
 
 ---
 
@@ -158,11 +156,9 @@ PDF file
     - UnsupervisedReadingOrderDetector: determines correct reading sequence
     - Group words into visual lines by Y-proximity
   → Canonical page representation: reading-order text + word tokens with bounding boxes
-  → DocumentChunker: split into ~300-char chunks at sentence boundaries (with 100-char overlap)
-  → Contextual Retrieval: Haiku generates a 1-2 sentence context prefix per chunk
-    (entity names, dates, section topics — enriched text used for search, original for citations)
-  → Store in SQLite: file bytes, metadata, page bounds, chunks + enriched text, FTS5 index
-  → (Optional) OpenAI embeddings for each enriched chunk → stored as BLOB
+  → DocumentChunker: split into ~150-char chunks at sentence boundaries
+  → Store in SQLite: file bytes, metadata, page bounds, chunks, FTS5 index
+  → (Optional) OpenAI embeddings for each chunk → stored as BLOB
 ```
 
 ### Question (streamed via SSE)
@@ -171,13 +167,10 @@ PDF file
 User question + document ID
   → RAG engine:
     1. FTS5 search (BM25 ranking) + vector search (cosine similarity)
-       — searches against enriched text (includes contextual keywords)
     2. Merge results with Reciprocal Rank Fusion
     3. Expand with adjacent chunks for context
     4. Stream answer from Claude with inline [C3] citations
-    5. Extract chunk IDs via regex → citation narrowing:
-       find the citing sentence in Claude's answer, match it to the best
-       sentence within the chunk → use that sentence (not the full chunk) for highlighting
+    5. Extract chunk IDs via regex → map to chunk text
   → For each citation:
     - Load canonical page representation from SQLite
     - Dense normalized substring match: strip whitespace, diacritics, ligatures (NFKD)
@@ -196,9 +189,8 @@ User question + document ID
 | Decision | Rationale |
 |----------|-----------|
 | **Pluggable engine interface** | `IAnswerEngine` lets both engines produce the same `AnswerStreamEvent` stream. The downstream citation + highlighting pipeline is completely engine-agnostic. Adding a new engine means implementing one interface. |
-| **Contextual Retrieval** | At upload time, Haiku generates a short context prefix per chunk (entity names, dates, section topics). The enriched text is what gets indexed in FTS5 and embedded — so a chunk about "15% revenue growth" also matches searches for "ACME financial results". Improves retrieval by 35–49% per Anthropic's benchmarks. |
 | **Hybrid RAG with RRF** | FTS5 catches keyword queries ("revenue 2024"); vector search catches semantic queries ("how much money did they make"). Reciprocal Rank Fusion merges both ranked lists without needing to normalize scores. Falls back to FTS5-only without an OpenAI key. |
-| **Larger chunks + citation narrowing** | Chunks are ~300 chars (3–4 sentences) for better semantic coherence and answer quality. Citation narrowing extracts the best-matching sentence from the chunk for precise highlighting — matching Claude's citing sentence against chunk sentences by word overlap. Falls back to the full chunk if the match is too weak. |
+| **Small chunks (~150 chars)** | Each chunk is 1–2 sentences. The full chunk text IS the citation — no post-processing or "focus pass" needed. Small chunks also mean more precise retrieval. |
 | **Canonical page representation** | Reading order is solved once at upload time using PdfPig's DLA pipeline. At query time, citation matching is a simple normalized substring search — no spatial reordering or heuristics. |
 | **Dense Unicode normalization** | Cited text is matched against page text after stripping whitespace, lowercasing, removing diacritics, and decomposing ligatures (ﬁ→fi via NFKD). This handles the mismatch between LLM-generated citations and raw PDF text. |
 | **SSE, not WebSocket** | Streaming is server-to-client only. SSE is simpler, works with native Fetch API, and auto-reconnects. |
@@ -229,13 +221,9 @@ ANTHROPIC_API_KEY=sk-ant-... docker compose -f docker-compose.prod.yml up -d
 | `Rag__Enabled` | `true` | Enable/disable RAG engine |
 | `Rag__Model` | `claude-sonnet-4-20250514` | Model for answer generation |
 | `Rag__TopK` | `8` | Number of chunks to retrieve |
-| `Rag__ContextualRetrieval` | `true` | Enable/disable contextual chunk enrichment at upload time |
-| `Rag__ContextualModel` | `claude-haiku-4-5-20251001` | Model for chunk enrichment (Haiku recommended — fast and cheap) |
 | `ClaudeCli__Enabled` | `true` | Enable/disable CLI engine |
 | `ClaudeCli__BinaryPath` | `claude` | Path to Claude Code binary |
 | `ClaudeCli__TimeoutSeconds` | `120` | CLI subprocess timeout |
-| `ClaudeCli__MaxTurns` | `2` | Max CLI agent turns |
-| `ClaudeCli__Model` | *(CLI default)* | Override the model used by the CLI engine |
 | `Database__Path` | `askmypdf.db` | SQLite file path |
 
 ---
@@ -249,7 +237,7 @@ ask-my-pdf/
 │   │   ├── Models/                # Document, Citation, HighlightArea, PageToken, etc.
 │   │   └── Services/              # IAnswerEngine contract
 │   ├── AskMyPdf.Infrastructure/    # All implementations
-│   │   ├── Ai/                    # RagAnswerEngine, ClaudeCliEngine, ContextualChunkEnricher, EmbeddingService
+│   │   ├── Ai/                    # RagAnswerEngine, ClaudeCliEngine, EmbeddingService
 │   │   ├── Pdf/                   # BoundingBoxExtractor, CoordinateTransformer, DocumentChunker
 │   │   ├── Data/                  # SqliteDb, DocumentRepository, ChunkRepository
 │   │   └── Services/              # DocumentService, QuestionService
@@ -267,7 +255,7 @@ ask-my-pdf/
 │       ├── hooks/                 # useDocumentChat (SSE), useDocumentManager, useTheme
 │       └── lib/                   # API client, types, utilities
 ├── tests/
-│   └── AskMyPdf.Tests/             # 96 xUnit tests
+│   └── AskMyPdf.Tests/             # 84 xUnit tests
 ├── Dockerfile                       # Multi-stage: Node → .NET SDK → runtime
 ├── docker-compose.yml               # Local dev with Caddy
 ├── docker-compose.prod.yml          # Production with HTTPS
